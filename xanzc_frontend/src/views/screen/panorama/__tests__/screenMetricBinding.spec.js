@@ -142,6 +142,75 @@ describe('screen metric binding plan', () => {
     expect(reused.datasourceRequest).toBeNull();
   });
 
+  it('替换当前槽位指标时只继承当前 active 兼容来源的 batchPolicy，并拒绝复用无策略同构来源', () => {
+    const batchPolicy = { maxAgeDays: 1, requiredComplete: true };
+    const boundDatasource = {
+      id: 9032,
+      status: 'ACTIVE',
+      sourceKind: 'WIDE_TABLE',
+      bizLine: 'COMMON',
+      configJson: JSON.stringify({
+        schemaVersion: 2,
+        scopeMode: 'NAMED_GROUP',
+        table: 'ORG_INDEX_RESULT',
+        batchPolicy
+      })
+    };
+    const sameConfig = {
+      schemaVersion: 2,
+      scopeMode: 'NAMED_GROUP',
+      table: 'ORG_INDEX_RESULT',
+      metrics: [{ metricCode: 'M_0277' }],
+      aggregation: { groupBy: 'NONE', agg: 'SUM' }
+    };
+    const plan = buildMetricBindingPlan({
+      slot: 'deposit',
+      slotLabel: '存款余额',
+      template: 'branch-overview-v1',
+      fieldSpecs: [valueField],
+      screen,
+      metrics: [orgDeposit],
+      assignments: { value: { metricCode: 'M_0277', unit: 'YUAN' } },
+      aggregation: { groupBy: 'NONE', agg: 'SUM' },
+      reason: '替换当前槽位指标',
+      boundDatasource,
+      datasources: [
+        { id: 9035, status: 'ACTIVE', sourceKind: 'WIDE_TABLE', bizLine: 'COMMON', configJson: JSON.stringify(sameConfig) },
+        { id: 9036, status: 'ACTIVE', sourceKind: 'WIDE_TABLE', bizLine: 'COMMON', configJson: JSON.stringify({ ...sameConfig, batchPolicy }) }
+      ]
+    });
+
+    expect(plan.ok).toBe(true);
+    expect(plan.existingDatasourceId).toBe(9036);
+    expect(plan.datasourceRequest).toBeNull();
+  });
+
+  it('当前槽位兼容来源有 batchPolicy 且没有可复用目标时，把策略带入新来源试跑配置', () => {
+    const batchPolicy = { maxAgeDays: 1, requiredComplete: true };
+    const plan = buildMetricBindingPlan({
+      slot: 'deposit',
+      slotLabel: '存款余额',
+      template: 'branch-overview-v1',
+      fieldSpecs: [valueField],
+      screen,
+      metrics: [orgDeposit],
+      assignments: { value: { metricCode: 'M_0277', unit: 'YUAN' } },
+      aggregation: { groupBy: 'NONE', agg: 'SUM' },
+      reason: '替换当前槽位指标',
+      boundDatasource: {
+        id: 9032,
+        status: 'ACTIVE',
+        sourceKind: 'WIDE_TABLE',
+        bizLine: 'COMMON',
+        configJson: JSON.stringify({ schemaVersion: 2, scopeMode: 'NAMED_GROUP', table: 'ORG_INDEX_RESULT', batchPolicy })
+      },
+      datasources: []
+    });
+
+    expect(plan.ok).toBe(true);
+    expect(JSON.parse(plan.datasourceRequest.configJson).batchPolicy).toEqual(batchPolicy);
+  });
+
   it('命名机构组不能绑定员工指标，城市汇总不能由机构指标自动加总', () => {
     expect(bindingShape('citySummary').blocked).toBe(true);
     const plan = buildMetricBindingPlan({

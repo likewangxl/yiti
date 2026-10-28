@@ -1,6 +1,9 @@
 package com.bank.branch.platform.report.dto.req;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonSetter;
+import com.fasterxml.jackson.annotation.Nulls;
+import jakarta.validation.Valid;
 import lombok.Data;
 import java.util.Map;
 
@@ -51,4 +54,13 @@ public class CanvasStyleDTO {
      */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private Map<String, SourceAvailabilityDTO> sourceAvailability;
+
+    /**
+     * 可选的代码化大屏期间比较配置；继续保存在现有 canvasStyle JSON 中，不新增表字段。
+     * 键必须来自当前屏总览槽或指标卡/完成情况组件目录，槽位和枚举由画布校验器验证。
+     */
+    @Valid
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
+    @JsonSetter(nulls = Nulls.FAIL, contentNulls = Nulls.FAIL)
+    private Map<String, PeriodComparisonConfigDTO> periodComparisons;
 }

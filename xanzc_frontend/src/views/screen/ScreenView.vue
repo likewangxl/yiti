@@ -1,7 +1,12 @@
 <template>
   <!-- 代码化全景拥有自己的根和视觉域，不进入旧 1920×1080 舞台。 -->
   <div v-if="isPanoramaPresentation" class="screen-panorama-root">
-    <div v-if="isDraftPreview && presentation?.template !== 'branch-overview-v1'" class="screen-draft-banner" data-testid="screen-draft-preview">未发布草稿预览</div>
+    <div v-if="isDraftPreview" class="screen-draft-banner" data-testid="screen-draft-preview">
+      <span>未发布草稿预览</span>
+      <span v-if="isTestData" class="screen-test-data-notice" data-testid="screen-test-data-notice">
+        测试数据 · 仅使用已有记录，非真实经营数据
+      </span>
+    </div>
     <PanoramaRuntime :view="view" :context="context" :back-path="draftBackPath"
       :batch-required="presentation?.type === 'CODE' && presentation?.template === 'branch-overview-v1'" />
   </div>
@@ -13,7 +18,12 @@
   </div>
 
   <div v-else class="screen-root">
-    <div v-if="isDraftPreview" class="screen-draft-banner" data-testid="screen-draft-preview">未发布草稿预览</div>
+    <div v-if="isDraftPreview" class="screen-draft-banner" data-testid="screen-draft-preview">
+      <span>未发布草稿预览</span>
+      <span v-if="isTestData" class="screen-test-data-notice" data-testid="screen-test-data-notice">
+        测试数据 · 仅使用已有记录，非真实经营数据
+      </span>
+    </div>
     <div class="scr-stage" :style="{ transform: `translate(-50%, -50%) scale(${scale})` }">
       <div class="scr-header">
         <button type="button" class="scr-back" aria-label="返回上一页" @click="goBack">‹ 返回</button>
@@ -78,6 +88,7 @@ const hasPresentation = computed(() => Object.prototype.hasOwnProperty.call(
 const isPanoramaPresentation = computed(() => presentation.value?.type === 'CODE'
   && ['branch-overview-v1', 'retail-overview-v1', 'corporate-overview-v1'].includes(presentation.value?.template));
 const isDraftPreview = computed(() => view.value?.state === 'draft');
+const isTestData = computed(() => view.value?.renderPackage?.canvasStyle?.dataClassification === 'TEST');
 const draftBackPath = computed(() => isDraftPreview.value && route.query?.from === 'screen-center' ? '/screens' : '');
 const unsupportedPresentation = computed(() => Boolean(
   view.value?.renderPackage && hasPresentation.value && !isPanoramaPresentation.value
@@ -175,6 +186,13 @@ onBeforeUnmount(() => {
   letter-spacing: .08em;
   line-height: 1.4;
   text-align: center;
+}
+
+.screen-test-data-notice {
+  display: block;
+  margin-top: 4px;
+  color: #fff;
+  font-size: 15px;
 }
 
 .screen-root > .screen-draft-banner {

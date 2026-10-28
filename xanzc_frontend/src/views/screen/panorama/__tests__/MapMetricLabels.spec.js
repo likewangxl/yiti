@@ -24,6 +24,78 @@ function pointInRing(point, ring) {
 function pointInRegion(point, region) {
   return pointInRing(point, region.outer) && !region.holes.some(hole => pointInRing(point, hole));
 }
+
+function rectangle(left, top, width, height) {
+  return { left, top, right: left + width, bottom: top + height, width, height };
+}
+
+function rectanglesIntersect(first, second) {
+  return first.left < second.right && first.right > second.left
+    && first.top < second.bottom && first.bottom > second.top;
+}
+
+function mountMapWithTooltipGeometry(props) {
+  const originalViewport = {
+    width: Object.getOwnPropertyDescriptor(window, 'innerWidth'),
+    height: Object.getOwnPropertyDescriptor(window, 'innerHeight')
+  };
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1800 });
+  Object.defineProperty(window, 'innerHeight', { configurable: true, value: 1100 });
+
+  const widget = document.createElement('div');
+  widget.className = 'presentation-map-widget';
+  const host = document.createElement('div');
+  widget.appendChild(host);
+  document.body.appendChild(widget);
+
+  const widgetRect = rectangle(450, 150, 900, 700);
+  const mapRect = rectangle(600, 220, 600, 560);
+  widget.getBoundingClientRect = () => widgetRect;
+  const wrapper = mount(PanoramaMap, {
+    attachTo: host,
+    global: { stubs: { Teleport: true } },
+    props
+  });
+  wrapper.element.getBoundingClientRect = () => mapRect;
+  wrapper.findAll('.panorama-map__region-label-hit[data-city-code]').forEach(label => {
+    const code = label.attributes('data-city-code');
+    const labelRect = code === '610200'
+      ? rectangle(1030, 440, 92, 36)
+      : rectangle(680, 390, 92, 36);
+    label.element.getBoundingClientRect = () => labelRect;
+  });
+
+  return {
+    wrapper,
+    mapRect,
+    widgetRect,
+    cleanup() {
+      wrapper.unmount();
+      widget.remove();
+      for (const [key, descriptor] of Object.entries(originalViewport)) {
+        if (descriptor) Object.defineProperty(window, key === 'width' ? 'innerWidth' : 'innerHeight', descriptor);
+        else delete window[key === 'width' ? 'innerWidth' : 'innerHeight'];
+      }
+    }
+  };
+}
+
+async function hoverCityTooltip(wrapper, code) {
+  await wrapper.get(`button[data-city-code="${code}"]`).trigger('pointerenter');
+  await nextTick();
+  await nextTick();
+  return wrapper.get('[role="tooltip"]');
+}
+
+function tooltipRectangle(tooltip) {
+  return rectangle(
+    Number.parseFloat(tooltip.element.style.left) || 0,
+    Number.parseFloat(tooltip.element.style.top) || 0,
+    Number.parseFloat(tooltip.element.style.width) || 304,
+    420
+  );
+}
+
 describe('地图指标联动显示', () => {
   it('按调用方已确认的范围显示指标，切换后更新且无数据不补零', async () => {
     const wrapper = mount(PanoramaMap, { props: { geoJson: { ...geoJson, features: [geoJson.features[0]] }, metricLabel: '存款余额', metricValues: { '610100': '125万元' } } });
@@ -151,8 +223,47 @@ describe('地图指标联动显示', () => {
       }
     });
     await wrapper.vm.$nextTick();
-    expect(wrapper.get('path[data-region-code="610100"]').attributes('style')).toContain('#4f9da6');
+    expect(wrapper.get('path[data-region-code="610100"]').attributes('style')).toContain(provinceCityColor('610100'));
     expect(wrapper.get('path[data-region-code="610200"]').attributes('style')).toContain('#65738a');
+    wrapper.unmount();
+  });
+
+  it('市级无机构与归属待确认区县保持中性色，选中和悬浮不恢复分类色', async () => {
+    const wrapper = mount(PanoramaMap, {
+      props: {
+        geoJson,
+        mode: 'city',
+        colorByMetric: true,
+        metricColors: { '610100': '#123456', '610200': '#654321' },
+        regionStates: { '610100': 'NO_INSTITUTION', '610200': 'MISSING' },
+        selectedRegionCode: '610100'
+      }
+    });
+    await wrapper.vm.$nextTick();
+
+    const noInstitutionGroup = wrapper.findAll('g.panorama-map__region')
+      .find(group => group.find('path[data-region-code="610100"]').exists());
+    const noInstitutionPath = noInstitutionGroup.get('path[data-region-code="610100"]');
+    const missingPath = wrapper.get('path[data-region-code="610200"]');
+    const selectedStyle = noInstitutionPath.attributes('style');
+    expect(noInstitutionGroup.classes()).toContain('is-no-institution');
+    expect(noInstitutionPath.attributes('data-region-state')).toBe('NO_INSTITUTION');
+    expect(selectedStyle).toContain('stroke-dasharray');
+    expect(selectedStyle).toContain('#3e4e65');
+    expect(selectedStyle).toContain('#f3c8ff');
+    expect(selectedStyle).toContain('stroke-width: 0.65');
+    expect(selectedStyle).not.toContain('#123456');
+    expect(missingPath.attributes('data-region-state')).toBe('MISSING');
+    expect(missingPath.attributes('style')).toContain('#65738a');
+
+    await wrapper.setProps({ selectedRegionCode: null });
+    await wrapper.vm.$nextTick();
+    expect(noInstitutionPath.attributes('style')).toContain('#26364d');
+    await noInstitutionPath.trigger('pointerenter');
+    expect(noInstitutionPath.attributes('style')).toContain('#3e4e65');
+    await noInstitutionPath.trigger('pointerleave');
+    expect(noInstitutionPath.attributes('style')).toContain('#26364d');
+
     wrapper.unmount();
   });
 
@@ -185,6 +296,83 @@ describe('地图指标联动显示', () => {
 
 
 describe('城市悬浮详情', () => {
+  it('metrics inline 和 callout 悬浮详情都定位在地图外侧，不与 widget 或地图相交', async () => {
+    const details = {
+      '610100': { institutionCount: 2, metrics: [{ key: 'deposit', label: '存款余额', value: '125万元' }] },
+      '610200': { institutionCount: 1, metrics: [{ key: 'deposit', label: '存款余额', value: '20万元' }] }
+    };
+    const inline = mountMapWithTooltipGeometry({
+      geoJson,
+      appearance: 'relief',
+      labelLayout: 'inline',
+      cityDetailMode: 'metrics',
+      metricValues: { '610100': '125万元', '610200': '20万元' },
+      cityDetails: details
+    });
+    try {
+      const tooltip = await hoverCityTooltip(inline.wrapper, '610100');
+      const position = tooltipRectangle(tooltip);
+      expect(position.left + position.width).toBeLessThanOrEqual(inline.widgetRect.left);
+      expect(rectanglesIntersect(position, inline.widgetRect)).toBe(false);
+      expect(rectanglesIntersect(position, inline.mapRect)).toBe(false);
+    } finally {
+      inline.cleanup();
+    }
+
+    const callout = mountMapWithTooltipGeometry({
+      geoJson,
+      appearance: 'relief',
+      labelLayout: 'callout',
+      cityDetailMode: 'metrics',
+      metricValues: { '610100': '125万元', '610200': '20万元' },
+      cityDetails: details
+    });
+    try {
+      const leftTooltip = await hoverCityTooltip(callout.wrapper, '610100');
+      const leftPosition = tooltipRectangle(leftTooltip);
+      expect(leftPosition.left + leftPosition.width).toBeLessThanOrEqual(callout.widgetRect.left);
+      expect(rectanglesIntersect(leftPosition, callout.widgetRect)).toBe(false);
+      expect(rectanglesIntersect(leftPosition, callout.mapRect)).toBe(false);
+
+      await callout.wrapper.get('button[data-city-code="610100"]').trigger('pointerleave');
+      await nextTick();
+      const rightTooltip = await hoverCityTooltip(callout.wrapper, '610200');
+      const rightPosition = tooltipRectangle(rightTooltip);
+      expect(rightPosition.left).toBeGreaterThanOrEqual(callout.widgetRect.right);
+      expect(rectanglesIntersect(rightPosition, callout.widgetRect)).toBe(false);
+      expect(rectanglesIntersect(rightPosition, callout.mapRect)).toBe(false);
+    } finally {
+      callout.cleanup();
+    }
+  });
+
+  it('机构模式的 callout popup 继续位于地图外围左右列', async () => {
+    const institution = orgName => ({ institutionCount: 1, institutions: [{ orgCode: orgName, orgName }] });
+    const geometry = mountMapWithTooltipGeometry({
+      geoJson,
+      labelLayout: 'callout',
+      cityDetailMode: 'institutions',
+      cityDetails: { '610100': institution('西安支行'), '610200': institution('铜川支行') }
+    });
+    try {
+      const leftTooltip = await hoverCityTooltip(geometry.wrapper, '610100');
+      const leftPosition = tooltipRectangle(leftTooltip);
+      expect(leftPosition.left + leftPosition.width).toBeLessThanOrEqual(geometry.widgetRect.left);
+      expect(rectanglesIntersect(leftPosition, geometry.widgetRect)).toBe(false);
+      expect(rectanglesIntersect(leftPosition, geometry.mapRect)).toBe(false);
+
+      await geometry.wrapper.get('button[data-city-code="610100"]').trigger('pointerleave');
+      await nextTick();
+      const rightTooltip = await hoverCityTooltip(geometry.wrapper, '610200');
+      const rightPosition = tooltipRectangle(rightTooltip);
+      expect(rightPosition.left).toBeGreaterThanOrEqual(geometry.widgetRect.right);
+      expect(rectanglesIntersect(rightPosition, geometry.widgetRect)).toBe(false);
+      expect(rectanglesIntersect(rightPosition, geometry.mapRect)).toBe(false);
+    } finally {
+      geometry.cleanup();
+    }
+  });
+
   it('悬停和键盘聚焦展示已有指标、机构与日期，离开后收起', async () => {
     const wrapper=mount(PanoramaMap,{global:{stubs:{Teleport:true}},props:{geoJson,labelLayout:'callout',metricValues:{'610100':'125万元'},cityDetails:{'610100':{institutionCount:2,locatedCount:1,dataDate:'2026-08-30',metrics:[{key:'deposit',label:'存款余额',value:'125万元'},{key:'loan',label:'贷款余额',value:'暂无数据'}],institutions:[{orgCode:'A',orgName:'西安一支行'},{orgCode:'B',orgName:'西安二支行'}]}}}});
     const label=wrapper.get('button[data-city-code="610100"]');
@@ -284,7 +472,7 @@ describe('城市悬浮详情', () => {
     wrapper.unmount();
   });
 
-  it('机构模式无经营机构地市把名称放回对应区域，有机构地市仍保留外围 callout', async () => {
+  it('机构模式无经营机构地市把名称放回对应区域并阻止下钻，有机构地市仍保留外围 callout', async () => {
     const cityDetails = {
       '610100': { institutionCount: 1, institutions: [{ orgCode: 'XIAN-1', orgName: '西安一支行' }] },
       '610200': { institutionCount: 0, institutions: [] }
@@ -315,7 +503,8 @@ describe('城市悬浮详情', () => {
     expect(style).toContain(`left: ${expected.x}%`);
     expect(style).toContain(`top: ${expected.y}%`);
     await emptyLabel.trigger('click');
-    expect(wrapper.emitted('region-select')).toContainEqual([{ code: '610200', name: '铜川市' }]);
+    expect(wrapper.emitted('region-select')).toBeUndefined();
+    expect(wrapper.get('[data-testid="map-activation-status"]').text()).toBe('该地区无经营机构');
     wrapper.unmount();
   });
 

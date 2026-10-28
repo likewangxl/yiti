@@ -5,6 +5,8 @@ import com.bank.branch.platform.common.web.exception.BizException;
 import com.bank.branch.platform.report.dto.req.CanvasComponentDTO;
 import com.bank.branch.platform.report.dto.req.CanvasStyleDTO;
 import com.bank.branch.platform.report.dto.req.CodeScreenPresentationDTO;
+import com.bank.branch.platform.report.dto.req.PeriodComparisonConfigDTO;
+import com.bank.branch.platform.report.dto.req.PeriodComparisonSlotDTO;
 import com.bank.branch.platform.report.dto.req.ScreenCanvasDiscardReqDTO;
 import com.bank.branch.platform.report.dto.req.ScreenCanvasSaveReqDTO;
 import com.bank.branch.platform.report.entity.RptScreen;
@@ -1472,15 +1474,18 @@ class ScreenCanvasServiceTest {
         chart.setPropValue(Map.of("bindingKey", "deposit"));
         chart.setBindJson(existing.getBindJson());
         ScreenCanvasSaveReqDTO request = req(7L, 0, chart);
-        request.setCanvasStyle(displayStyle(1201L));
+        CanvasStyleDTO canvasStyle = displayStyle(1201L);
+        canvasStyle.setPeriodComparisons(Map.of("deposit-card", periodComparisonConfig()));
+        request.setCanvasStyle(canvasStyle);
 
         var response = service.saveCanvas(request);
 
-        ArgumentCaptor<String> style = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> styleJson = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> draft = ArgumentCaptor.forClass(String.class);
-        verify(canvasMapper).bumpVersion(eq(7L), eq(0), style.capture(), draft.capture(), anyString());
-        assertThat(style.getValue()).contains("\"displaySchemaVersion\":1", "\"componentId\":\"deposit-card\"",
-                "\"blockId\":1201", "\"subtitle\":\"\"");
+        verify(canvasMapper).bumpVersion(eq(7L), eq(0), styleJson.capture(), draft.capture(), anyString());
+        assertThat(styleJson.getValue()).contains("\"displaySchemaVersion\":1", "\"componentId\":\"deposit-card\"",
+                "\"blockId\":1201", "\"subtitle\":\"\"", "\"periodComparisons\":",
+                "\"metricCode\":\"M_0266\"");
         assertThat(draft.getValue()).contains("\"blockId\":1201", "\"bindingKey\":\"deposit\"");
         assertThat(response.getCanvasVersion()).isEqualTo(1);
     }
@@ -1611,6 +1616,26 @@ class ScreenCanvasServiceTest {
         } catch (Exception ex) {
             throw new AssertionError(ex);
         }
+    }
+
+    private PeriodComparisonConfigDTO periodComparisonConfig() {
+        PeriodComparisonConfigDTO config = new PeriodComparisonConfigDTO();
+        config.setDay(periodComparisonSlot("METRIC", "M_0266", "较昨日", "YUAN", "ORG_INDEX_RESULT"));
+        config.setMonth(periodComparisonSlot("UNSET", "", "", "", ""));
+        config.setYear(periodComparisonSlot("UNSET", "", "", "", ""));
+        return config;
+    }
+
+    private PeriodComparisonSlotDTO periodComparisonSlot(String mode, String metricCode,
+                                                          String outputColumn, String unit,
+                                                          String tableName) {
+        PeriodComparisonSlotDTO slot = new PeriodComparisonSlotDTO();
+        slot.setMode(mode);
+        slot.setMetricCode(metricCode);
+        slot.setOutputColumn(outputColumn);
+        slot.setUnit(unit);
+        slot.setTableName(tableName);
+        return slot;
     }
 
     private String displayStyleJson(long blockId) {

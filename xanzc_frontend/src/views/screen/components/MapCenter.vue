@@ -1,5 +1,5 @@
 <template>
-  <div class="scr-block mp-block" :class="{ 'mp-composite': isComposite || isCityDistrict }" :style="runtimeRootStyle">
+  <div ref="mapRoot" class="scr-block mp-block" :class="{ 'mp-composite': isComposite || isCityDistrict }" :style="runtimeRootStyle">
     <div v-if="unsupportedSchema" class="mp-config-gap" role="alert">地图配置版本不受支持，已拒绝渲染</div>
     <div v-else class="mp-kpi-toolbar" aria-label="地图经营指标">
       <div class="mp-kpi-tabs">
@@ -19,7 +19,7 @@
       <div class="mp-title">西安六区经营地图</div>
       <div v-if="configurationGap" class="mp-config-gap" role="alert">{{ configurationGap }}</div>
       <div class="mp-composite-canvas">
-        <v-chart class="mp-chart mp-xian-chart" :option="option" autoresize @click="onChartClick" />
+        <v-chart ref="mapChart" class="mp-chart mp-xian-chart" :option="option" autoresize @click="onChartClick" />
 
         <!-- 地图内只保留真实经纬度点，名称和指标在两侧分栏，并由引导线连接，避免标签遮挡行政区。 -->
         <template v-for="callout in localCallouts" :key="`local-${callout.point.orgCode}`">
@@ -56,7 +56,7 @@
     <template v-else-if="!unsupportedSchema && isCityDistrict">
       <div class="mp-title">{{ selectedRegion.shortName }}区县经营地图</div>
       <div class="mp-composite-canvas">
-        <v-chart class="mp-chart" :option="option" autoresize @click="onChartClick" />
+        <v-chart ref="mapChart" class="mp-chart" :option="option" autoresize @click="onChartClick" />
       </div>
       <div class="mp-attribution" role="note">
         <a class="mp-attribution-link" :href="SHAANXI_CITY_BOUNDARY_SOURCE_URL"
@@ -66,7 +66,7 @@
     <template v-else-if="!unsupportedSchema">
       <div class="mp-title">陕西省经营指标地图</div>
       <div class="mp-composite-canvas">
-        <v-chart class="mp-chart" :option="option" autoresize @click="onChartClick" />
+        <v-chart ref="mapChart" class="mp-chart" :option="option" autoresize @click="onChartClick" />
       </div>
     </template>
     <aside v-if="detailOpen" class="mp-region-detail" aria-live="polite">
@@ -115,6 +115,7 @@ import { MAP_ANCHORS, normalizeMapConfig, resolveCompositeMapNodes, resolveXianS
   XIAN_SECONDARY_BRANCH_DISCLAIMER, SHAANXI_MAP_REGIONS } from '@/utils/screenScope';
 import { MAP_METRIC_OPTIONS, achievementColor, featureContainsPoint, finiteNumber,
   formatMetricValue, simulatedMetric } from '@/utils/mapMetrics';
+import { positionCityTooltip } from '../panorama/mapCityTooltipLayout';
 
 use([CanvasRenderer, MapChart, EffectScatterChart, GeoComponent, TooltipComponent]);
 registerMap('shaanxi', shaanxiGeo);
@@ -172,6 +173,8 @@ const props = defineProps({
   runtimeHeaderInset: { type: Number, default: 0 }
 });
 const router = useRouter();
+const mapRoot = ref(null);
+const mapChart = ref(null);
 const injectedProfiles = inject('screenProfiles', null);
 const injectedRegionMetrics = inject('screenRegionMetrics', null);
 
@@ -434,9 +437,75 @@ const mapDepthSeries = computed(() => ['56%', '55%', '54%'].map((vertical, index
   z: index
 })));
 
+// 自由画布可能整体缩放；先按视口坐标避让地图，再转回 ECharts 局部坐标。
+// 提示层挂到 body，由 ECharts 将返回的局部坐标转换到最终显示位置。
+function positionMapTooltip(point, _params, tooltipDom, _rect, size) {
+  const rootElement = mapRoot.value;
+  const chartElement = mapChart.value?.$el || rootElement?.querySelector?.('.mp-chart');
+  const rootRect = rootElement?.getBoundingClientRect?.();
+  const chartRect = chartElement?.getBoundingClientRect?.();
+  const chartWidth = Number(chartElement?.clientWidth) || Number(chartRect?.width) || 0;
+  const chartHeight = Number(chartElement?.clientHeight) || Number(chartRect?.height) || 0;
+  const viewportWidth = Number(window.innerWidth) || Number(document.documentElement?.clientWidth) || 0;
+  const viewportHeight = Number(window.innerHeight) || Number(document.documentElement?.clientHeight) || 0;
+
+  if (!rootRect || !chartRect || !chartWidth || !chartHeight || !viewportWidth || !viewportHeight) {
+    if (tooltipDom?.style) tooltipDom.style.display = 'none';
+    return point;
+  }
+
+  const scaleX = chartRect.width / chartWidth || 1;
+  const scaleY = chartRect.height / chartHeight || 1;
+  const pointX = chartRect.left + Number(point?.[0] || 0) * scaleX;
+  const pointY = chartRect.top + Number(point?.[1] || 0) * scaleY;
+  const contentWidth = Number(size?.contentSize?.[0]) || Number(tooltipDom?.offsetWidth) || 1;
+  const contentHeight = Number(size?.contentSize?.[1]) || Number(tooltipDom?.offsetHeight) || 1;
+  const mapRect = {
+    left: rootRect.left,
+    top: rootRect.top,
+    right: rootRect.right,
+    bottom: rootRect.bottom,
+    width: rootRect.width,
+    height: rootRect.height
+  };
+  const position = positionCityTooltip({
+    mapRect,
+    labelRect: { left: pointX, top: pointY, width: 0, height: 0 },
+    tooltipWidth: contentWidth,
+    tooltipHeight: contentHeight,
+    viewport: { width: viewportWidth, height: viewportHeight },
+    side: pointX <= rootRect.left + rootRect.width / 2 ? 'left' : 'right',
+    gap: 10,
+    margin: 12
+  });
+
+  if (!position) {
+    if (tooltipDom?.style) tooltipDom.style.display = 'none';
+    return point;
+  }
+
+  if (tooltipDom?.style) {
+    tooltipDom.style.display = '';
+    tooltipDom.style.width = `${position.width}px`;
+    tooltipDom.style.maxHeight = `${position.maxHeight}px`;
+    tooltipDom.style.overflowY = 'auto';
+  }
+  return [
+    (position.left - chartRect.left) / scaleX,
+    (position.top - chartRect.top) / scaleY
+  ];
+}
+
 const option = computed(() => ({
   tooltip: {
     ...scrTooltipStyle(),
+    className: 'mp-map-tooltip',
+    renderMode: 'html',
+    appendToBody: true,
+    confine: false,
+    transitionDuration: 0,
+    extraCssText: 'box-sizing:border-box;max-width:min(304px,calc(100vw - 24px));max-height:calc(100vh - 24px);overflow-y:auto;white-space:normal;overflow-wrap:anywhere;',
+    position: positionMapTooltip,
     formatter: params => {
       if (params?.seriesType === 'effectScatter') return `${params.name}<br/>点击进入机构详情屏`;
       const detail = metricDetail(params?.name);

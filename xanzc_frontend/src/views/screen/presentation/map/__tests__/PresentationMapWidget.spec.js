@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { mount } from '@vue/test-utils';
 import PresentationMapWidget from '../PresentationMapWidget.vue';
+import { cityDistrictColors } from '../../../panorama/cityDistrictPalette';
 
 const presentation = {
   screenCode: 'SCR_PROVINCE_MAP_V2',
@@ -126,6 +127,7 @@ describe('PresentationMapWidget', () => {
     expect(oldMap.props('regionStates')['610600']).toBe('NO_INSTITUTION');
     expect(oldMap.props('metricColors')['610600']).toBe('#65738a');
     expect(province.get('[data-testid="presentation-map-legend-has-institution"]').text()).toContain('有经营机构');
+    expect(province.get('[data-testid="presentation-map-legend-has-institution"] i').attributes('style')).toContain('linear-gradient');
     expect(province.get('[data-testid="presentation-map-legend-no-institution"]').text()).toContain('无经营机构');
     province.unmount();
 
@@ -182,7 +184,7 @@ describe('PresentationMapWidget', () => {
     expect(wrapper.get('h2').text()).toBe('全辖机构分布');
   });
 
-  it('city 按真实区县边界传递有机构突出态、无机构灰色和默认聚焦', () => {
+  it('city 按真实区县边界传递分类色、独立机构状态和放大后的默认聚焦', () => {
     const cityGeoJson = {
       type: 'FeatureCollection',
       features: [
@@ -203,12 +205,15 @@ describe('PresentationMapWidget', () => {
     });
     const map = wrapper.getComponent(mapStub);
     expect(map.props('regionStates')).toMatchObject({ 'D-A': 'HAS_INSTITUTION', 'D-B': 'NO_INSTITUTION' });
-    expect(map.props('metricColors')['D-B']).toBe('#26364d');
+    expect(map.props('metricColors')).toEqual({ 'D-A': cityDistrictColors(['D-A', 'D-B'])['D-A'], 'D-B': '#26364d' });
     expect(map.props('showRegionMetrics')).toBe(false);
     expect(map.props('viewFit')).toMatchObject({ focusRegionCodes: ['D-A'], initialZoom: 1.65 });
-    expect(wrapper.get('[data-testid="presentation-map-legend-has-institution"]').text()).toBe('有经营机构');
+    expect(wrapper.get('[data-testid="presentation-map-legend-district-colors"]').text()).toBe('有经营机构区县');
+    expect(wrapper.get('[data-testid="presentation-map-legend-district-colors"] i').attributes('style')).toContain('linear-gradient');
     expect(wrapper.get('[data-testid="presentation-map-legend-no-institution"]').text()).toBe('无经营机构');
+    expect(wrapper.get('[data-testid="presentation-map-legend-no-institution"] i').classes()).toContain('is-outline-dashed');
     expect(wrapper.get('[data-testid="presentation-map-legend-district-unknown"]').text()).toBe('归属待确认');
+    expect(wrapper.find('[data-testid="presentation-map-legend-district-unknown"] i').exists()).toBe(false);
     expect(wrapper.find('[data-testid="presentation-map-legend-high"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="presentation-map-legend-no-institution"]').exists()).toBe(true);
     wrapper.unmount();
@@ -229,7 +234,23 @@ describe('PresentationMapWidget', () => {
     const map = wrapper.getComponent(mapStub);
     expect(map.props('regionStates')['D-A']).toBe('HAS_INSTITUTION');
     expect(map.props('regionStates')['D-B']).toBe('MISSING');
-    expect(map.props('metricColors')['D-B']).toBe('#65738a');
+    expect(map.props('metricColors')).toEqual({ 'D-A': cityDistrictColors(['D-A', 'D-B'])['D-A'], 'D-B': '#65738a' });
+    wrapper.unmount();
+  });
+
+  it('city 无占用区县时仍使用 2 倍默认视图缩放', () => {
+    const wrapper = mount(PresentationMapWidget, {
+      props: {
+        presentation,
+        model: { ...model, institutions: [] },
+        geoJson,
+        mode: 'city',
+        cityCode: '610100'
+      },
+      global: { stubs: { PanoramaMap: mapStub } }
+    });
+
+    expect(wrapper.getComponent(mapStub).props('viewFit')).toMatchObject({ initialZoom: 1 });
     wrapper.unmount();
   });
 

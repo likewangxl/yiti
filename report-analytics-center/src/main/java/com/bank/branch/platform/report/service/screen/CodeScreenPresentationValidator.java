@@ -1,7 +1,9 @@
 package com.bank.branch.platform.report.service.screen;
 
 import com.bank.branch.platform.report.dto.req.CodeScreenPresentationDTO;
+import com.bank.branch.platform.report.dto.req.PeriodComparisonConfigDTO;
 import com.bank.branch.platform.report.dto.req.presentation.InstitutionRulesDTO;
+import com.bank.branch.platform.report.dto.req.presentation.ScreenComponentType;
 import com.bank.branch.platform.report.dto.req.presentation.ScreenDisplayComponentDTO;
 import com.bank.branch.platform.report.dto.req.presentation.ScreenDisplayComparisonDTO;
 import com.bank.branch.platform.report.dto.req.presentation.ScreenDisplayContractValidator;
@@ -14,6 +16,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -71,6 +74,22 @@ public final class CodeScreenPresentationValidator {
     private static final Pattern DISPLAY_ORG_CODE_PATTERN = Pattern.compile("[A-Za-z0-9_-]{1,64}");
     /** 运行目录只消费可信包内的明确分类；DEMO 等展示文案不能成为安全标签。 */
     private static final Set<String> DATA_CLASSIFICATIONS = Set.of("TEST", "LIVE", "PROD");
+    private static final Set<String> PERIOD_COMPARISON_MODES = Set.of("UNSET", "METRIC", "OFFSET");
+    private static final Set<String> PERIOD_COMPARISON_UNITS = Set.of(
+            "YUAN", "TEN_THOUSAND", "HUNDRED_MILLION");
+    private static final Set<String> PERIOD_COMPARISON_TABLES = Set.of(
+            "ORG_INDEX_RESULT", "EMP_INDEX_RESULT", "CUST_INDEX_RESULT");
+    private static final Set<String> PERIOD_COMPARISON_SLOTS = Set.of("day", "month", "year");
+    private static final Set<String> PERIOD_COMPARISON_FIELDS = Set.of(
+            "mode", "metricCode", "outputColumn", "unit", "tableName");
+    private static final Set<String> PERIOD_COMPARISON_OVERVIEW_KEYS = Set.of(
+            "overview-deposit", "overview-loan", "overview-settlementDeposit");
+    private static final Pattern PERIOD_COMPARISON_KEY =
+            Pattern.compile("[A-Za-z][A-Za-z0-9_-]{1,63}");
+    private static final Pattern PERIOD_COMPARISON_METRIC_CODE =
+            Pattern.compile("[A-Za-z0-9_-]{1,64}");
+    private static final int PERIOD_COMPARISON_OUTPUT_MAX_LENGTH = 200;
+    private static final int PERIOD_COMPARISON_MAP_MAX_ENTRIES = 256;
     private static final Set<String> SOURCE_AVAILABILITY_STATUSES = Set.of(
             "AVAILABLE", "NO_SOURCE", "NO_ROWS", "NO_VALUES", "PARTIAL", "HISTORICAL");
     private static final Set<String> METRIC_LABEL_KEYS = Set.of(
@@ -815,6 +834,139 @@ public final class CodeScreenPresentationValidator {
             }
         }
         validateSourceAvailability(canvasStyle.get("sourceAvailability"), metadataSlots(canvasStyle));
+        validatePeriodComparisons(canvasStyle);
+    }
+
+    /**
+     * 校验画布根节点的期间比较配置。
+     *
+     * <p>期间比较是展示元数据，不参与 SQL 生成；其键仍必须来自当前展示协议的
+     * 固定总览槽或真实指标卡/完成情况组件，避免把任意脚本键写入画布并在运行时
+     * 误当成数据来源。该校验在保存、发布包读取和运行时共用的源元数据入口执行。</p>
+     */
+    private static void validatePeriodComparisons(JsonNode canvasStyle) {
+        JsonNode comparisons = canvasStyle == null ? null : canvasStyle.get("periodComparisons");
+        if (comparisons == null || comparisons.isMissingNode()) {
+            return;
+        }
+        if (!comparisons.isObject() || comparisons.size() > PERIOD_COMPARISON_MAP_MAX_ENTRIES) {
+            throw invalid();
+        }
+
+        Set<String> allowedKeys = periodComparisonKeys(canvasStyle);
+        Iterator<Map.Entry<String, JsonNode>> entries = comparisons.fields();
+        while (entries.hasNext()) {
+            Map.Entry<String, JsonNode> entry = entries.next();
+            String key = entry.getKey();
+            if (key == null || !PERIOD_COMPARISON_KEY.matcher(key).matches()
+                    || !allowedKeys.contains(key)) {
+                throw invalid();
+            }
+            validatePeriodComparisonConfig(entry.getValue());
+        }
+        // Also bind the JSON to the explicit DTO so a future field added to the raw checker
+        // cannot silently turn this map into an untyped payload.
+        try {
+            STRICT_PRESENTATION_MAPPER.convertValue(comparisons,
+                    new TypeReference<Map<String, PeriodComparisonConfigDTO>>() { });
+        } catch (Exception ex) {
+            throw new RptException(RptErrorCode.SCREEN_LAYOUT_INVALID, ex);
+        }
+    }
+
+    /** 返回当前 presentation 支持的总览键和指标卡/完成情况 componentId。 */
+    private static Set<String> periodComparisonKeys(JsonNode canvasStyle) {
+        Set<String> keys = new LinkedHashSet<>();
+        JsonNode presentation = canvasStyle == null ? null : canvasStyle.path("presentation");
+        String template = presentation != null && presentation.isObject()
+                ? presentation.path("template").asText(null) : null;
+        if (BRANCH_OVERVIEW_TEMPLATE.equals(template)) {
+            keys.addAll(PERIOD_COMPARISON_OVERVIEW_KEYS);
+        }
+        JsonNode components = presentation != null && presentation.isObject()
+                ? presentation.path("display").path("components") : null;
+        if (components != null && components.isArray()) {
+            for (JsonNode component : components) {
+                if (component == null || !component.isObject()) {
+                    continue;
+                }
+                String type = component.path("componentType").asText(null);
+                String componentId = component.path("componentId").asText(null);
+                if ((ScreenComponentType.METRIC_CARD.name().equals(type)
+                        || ScreenComponentType.COMPLETION.name().equals(type))
+                        && componentId != null && !componentId.isBlank()
+                        && component.path("visible").asBoolean(true)) {
+                    keys.add(componentId);
+                }
+            }
+        }
+        return keys;
+    }
+
+    private static void validatePeriodComparisonConfig(JsonNode config) {
+        if (config == null || !config.isObject() || config.size() != PERIOD_COMPARISON_SLOTS.size()) {
+            throw invalid();
+        }
+        Iterator<Map.Entry<String, JsonNode>> slots = config.fields();
+        while (slots.hasNext()) {
+            Map.Entry<String, JsonNode> entry = slots.next();
+            if (!PERIOD_COMPARISON_SLOTS.contains(entry.getKey())) {
+                throw invalid();
+            }
+            validatePeriodComparisonSlot(entry.getValue());
+        }
+        for (String slot : PERIOD_COMPARISON_SLOTS) {
+            if (!config.has(slot)) {
+                throw invalid();
+            }
+        }
+    }
+
+    private static void validatePeriodComparisonSlot(JsonNode slot) {
+        if (slot == null || !slot.isObject() || slot.size() != PERIOD_COMPARISON_FIELDS.size()) {
+            throw invalid();
+        }
+        Iterator<Map.Entry<String, JsonNode>> fields = slot.fields();
+        while (fields.hasNext()) {
+            Map.Entry<String, JsonNode> entry = fields.next();
+            if (!PERIOD_COMPARISON_FIELDS.contains(entry.getKey())
+                    || entry.getValue() == null || !entry.getValue().isTextual()) {
+                throw invalid();
+            }
+        }
+        for (String field : PERIOD_COMPARISON_FIELDS) {
+            if (!slot.has(field)) {
+                throw invalid();
+            }
+        }
+
+        String mode = slot.path("mode").asText();
+        String metricCode = slot.path("metricCode").asText();
+        String outputColumn = slot.path("outputColumn").asText();
+        String unit = slot.path("unit").asText();
+        String tableName = slot.path("tableName").asText();
+        if (!PERIOD_COMPARISON_MODES.contains(mode)) {
+            throw invalid();
+        }
+        if ("UNSET".equals(mode)) {
+            if (!metricCode.isEmpty() || !outputColumn.isEmpty()
+                    || !unit.isEmpty() || !tableName.isEmpty()) {
+                throw invalid();
+            }
+            return;
+        }
+        if (!PERIOD_COMPARISON_METRIC_CODE.matcher(metricCode).matches()) {
+            throw invalid();
+        }
+        validatePlainText(slot.get("outputColumn"), PERIOD_COMPARISON_OUTPUT_MAX_LENGTH, false);
+        // Existing front-end configurations can omit a unit; runtime resolution then
+        // fails closed. A non-empty unit must still be one of the three amount units.
+        if (!unit.isEmpty() && !PERIOD_COMPARISON_UNITS.contains(unit)) {
+            throw invalid();
+        }
+        if (!PERIOD_COMPARISON_TABLES.contains(tableName)) {
+            throw invalid();
+        }
     }
 
     /** 返回来源可用性元数据在当前模板下可声明的槽位；历史样式继续沿用分行槽位。 */

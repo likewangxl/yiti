@@ -1135,4 +1135,79 @@ class CodeScreenPresentationValidatorTest {
                 MAPPER.readTree(rankingAverageAsDimension), "ranking", datasource))
                 .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
     }
+
+    @Test
+    void acceptsPeriodComparisonsWithUnsetEmptyFieldsAndMetricConfiguration() {
+        CodeScreenPresentationValidator.validateCanvasStyle(
+                "{\"presentation\":{\"type\":\"CODE\",\"template\":\"branch-overview-v1\"},"
+                        + "\"periodComparisons\":{\"overview-deposit\":{\"day\":"
+                        + periodSlot("METRIC", "M_0266", "较昨日", "YUAN", "ORG_INDEX_RESULT")
+                        + ",\"month\":" + unsetSlot() + ",\"year\":" + unsetSlot() + "}}}");
+    }
+
+    @Test
+    void rejectsInvalidPeriodComparisonKeySlotAndEnum() {
+        String valid = "{\"presentation\":{\"type\":\"CODE\",\"template\":\"branch-overview-v1\"},"
+                + "\"periodComparisons\":{\"overview-deposit\":{\"day\":"
+                + periodSlot("METRIC", "M_0266", "较昨日", "YUAN", "ORG_INDEX_RESULT")
+                + ",\"month\":" + unsetSlot() + ",\"year\":" + unsetSlot() + "}}}";
+
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(
+                valid.replace("overview-deposit", "arbitrary-script")))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(
+                valid.replace("\"mode\":\"METRIC\"", "\"mode\":\"UNKNOWN\"")))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(
+                valid.replace("\"unit\":\"YUAN\"", "\"unit\":\"PERCENT\"")))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(
+                valid.replace(",\"tableName\":\"ORG_INDEX_RESULT\"", ",\"unexpected\":\"x\",\"tableName\":\"ORG_INDEX_RESULT\"")))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+    }
+
+    @Test
+    void validatesPeriodComparisonShapeTypesLengthsAndHistoricalMissingUnit() {
+        String valid = "{\"presentation\":{\"type\":\"CODE\",\"template\":\"branch-overview-v1\"},"
+                + "\"periodComparisons\":{\"overview-deposit\":{\"day\":"
+                + periodSlot("METRIC", "M_0266", "较昨日", "YUAN", "ORG_INDEX_RESULT")
+                + ",\"month\":" + unsetSlot() + ",\"year\":" + unsetSlot() + "}}}";
+
+        String historicalUnitMissing = valid.replace("\"unit\":\"YUAN\"", "\"unit\":\"\"");
+        CodeScreenPresentationValidator.validateCanvasStyle(historicalUnitMissing);
+
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(
+                valid.replace("\"tableName\":\"ORG_INDEX_RESULT\"", "\"tableName\":\"OTHER\"")))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(
+                valid.replace("\"metricCode\":\"M_0266\"", "\"metricCode\":12")))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(
+                valid.replace("\"outputColumn\":\"较昨日\"", "\"outputColumn\":\""
+                        + "x".repeat(201) + "\"")))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(
+                valid.replace(",\"year\":" + unsetSlot(), "")))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(
+                valid.replace("\"mode\":\"UNSET\"", "\"mode\":\"METRIC\"")))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+    }
+
+    @Test
+    void absentPeriodComparisonsKeepsHistoricalCanvasCompatible() {
+        CodeScreenPresentationValidator.validateCanvasStyle(
+                "{\"presentation\":{\"type\":\"CODE\",\"template\":\"branch-overview-v1\"}}");
+    }
+
+    private String unsetSlot() {
+        return "{\"mode\":\"UNSET\",\"metricCode\":\"\",\"outputColumn\":\"\",\"unit\":\"\",\"tableName\":\"\"}";
+    }
+
+    private String periodSlot(String mode, String metricCode, String outputColumn,
+                              String unit, String tableName) {
+        return "{\"mode\":\"" + mode + "\",\"metricCode\":\""
+                + metricCode + "\",\"outputColumn\":\"" + outputColumn
+                + "\",\"unit\":\"" + unit + "\",\"tableName\":\"" + tableName + "\"}";
+    }
 }

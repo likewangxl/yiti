@@ -1030,7 +1030,8 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
           },
           components: presentationComponents,
           blockResults: nextModel.blockResults,
-          rangeResults: {}
+          rangeResults: {},
+          dataDate: nextModel.dataDate
         });
         const periodRangeLoad = await loadPeriodComparisonRanges(
           preliminary.rangeBlockIds, packageInfo, view, context, nextModel, currentGeneration, batchState
@@ -1044,7 +1045,8 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
           },
           components: presentationComponents,
           blockResults: nextModel.blockResults,
-          rangeResults: periodRangeLoad.results
+          rangeResults: periodRangeLoad.results,
+          dataDate: nextModel.dataDate
         });
         nextModel.periodComparisonConfig = periodConfigs;
         nextModel.periodComparisonSources = indexed.sources;

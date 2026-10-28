@@ -170,48 +170,57 @@
           />
         </article>
 
-        <article class="retail-panel retail-attention-panel" data-testid="retail-attention">
+        <article class="retail-panel retail-credit-panel" data-testid="retail-credit-panel">
           <header class="retail-panel__heading">
             <div>
-              <span class="retail-kicker">经营关注</span>
-              <h2>需要关注 / 数据核验</h2>
+              <span class="retail-kicker">信贷经营</span>
+              <h2>信贷规模与质量</h2>
             </div>
-            <span>{{ attentionItems.length ? `${attentionItems.length} 条` : '暂无数据' }}</span>
+            <span>指标日期独立展示</span>
           </header>
-          <section v-if="hasDepositRankingShape && institutionDifferenceItems.length" class="retail-attention-difference" data-testid="retail-attention-difference-list" aria-label="日均与时点差额关注">
-            <header>
-              <strong>日均与时点差额关注</strong>
-              <small>同日口径对照，不代表净增 / 风险结论</small>
-            </header>
-            <ul>
-              <li v-for="item in institutionDifferenceItems" :key="`difference-${item.orgCode || item.name}`">
-                <button type="button" data-testid="retail-attention-difference-row" @click="openInstitution(item)">
-                  <span>{{ item.name || item.orgName || item.orgCode || '—' }}</span>
-                  <strong>{{ formatAmount(item.difference, institutionDifferenceValues).text }} {{ formatAmount(item.difference, institutionDifferenceValues).unit }}</strong>
-                </button>
-              </li>
-            </ul>
-          </section>
-          <ul v-if="attentionItems.length" class="retail-attention-list retail-scroll-region" tabindex="0" aria-label="经营关注事项">
-            <li v-for="(item, index) in attentionItems" :key="`${item.label || 'attention'}-${item._issueKey || index}`">
-              <button
-                type="button"
-                class="retail-attention-row"
-                data-testid="retail-attention-row"
-                :aria-label="`查看事项详情：${item.label || '—'}`"
-                @click="openAttention(item, $event)"
-              >
-                <span class="retail-attention-list__mark" :class="{ 'is-verification': item.isVerification }" aria-hidden="true">{{ item.isVerification ? '?' : '!' }}</span>
-                <span class="retail-attention-list__main">
-                  <strong>{{ item.label || '—' }}</strong>
-                  <small>{{ item.verificationSummary || `${item.isVerification ? '核验' : '责任'} ${item.owner || '未提供'} · 日期 ${item.deadline || '未提供'}` }}</small>
-                </span>
-                <b>{{ formatMetric(item.count) }}</b>
-                <span class="retail-attention-row__arrow" aria-hidden="true">›</span>
-              </button>
-            </li>
-          </ul>
-          <div v-else-if="!institutionDifferenceItems.length" class="retail-empty">暂无来源已确认事项</div>
+          <div class="retail-credit__cards">
+            <div class="retail-credit-card" data-credit-key="retailLoan">
+              <span>{{ creditLoanLabel }}</span>
+              <div class="retail-credit-card__value">
+                <strong :class="{ 'is-empty': !hasValue(creditLoanKpi.value) }">{{ displayKpi(creditLoanKpi).text }}</strong>
+                <small>{{ creditUnit(creditLoanKpi) }}</small>
+              </div>
+              <span class="retail-credit-card__date" data-testid="retail-credit-loan-date">数据日期 {{ metricDataDate(creditLoanKpi) }}</span>
+            </div>
+            <div class="retail-credit-card" data-credit-key="retailNplRate">
+              <span>{{ creditNplRateLabel }}</span>
+              <div class="retail-credit-card__value">
+                <strong :class="{ 'is-empty': !hasValue(creditNplRateKpi.value) }">{{ displayKpi(creditNplRateKpi).text }}</strong>
+                <small>{{ creditUnit(creditNplRateKpi) }}</small>
+              </div>
+              <span class="retail-credit-card__date" data-testid="retail-credit-npl-date">数据日期 {{ metricDataDate(creditNplRateKpi) }}</span>
+            </div>
+          </div>
+          <details class="retail-attention-entry" data-testid="retail-attention-entry">
+            <summary>经营事项与数据核验（{{ attentionItems.length }}）</summary>
+            <section class="retail-attention-panel" data-testid="retail-attention">
+              <ul v-if="attentionItems.length" class="retail-attention-list retail-scroll-region" tabindex="0" aria-label="经营关注事项">
+                <li v-for="(item, index) in attentionItems" :key="`${item.label || 'attention'}-${item._issueKey || index}`">
+                  <button
+                    type="button"
+                    class="retail-attention-row"
+                    data-testid="retail-attention-row"
+                    :aria-label="`查看事项详情：${item.label || '—'}`"
+                    @click="openAttention(item, $event)"
+                  >
+                    <span class="retail-attention-list__mark" :class="{ 'is-verification': item.isVerification }" aria-hidden="true">{{ item.isVerification ? '?' : '!' }}</span>
+                    <span class="retail-attention-list__main">
+                      <strong>{{ item.label || '—' }}</strong>
+                      <small>{{ item.verificationSummary || `${item.isVerification ? '核验' : '责任'} ${item.owner || '未提供'} · 日期 ${item.deadline || '未提供'}` }}</small>
+                    </span>
+                    <b>{{ formatMetric(item.count) }}</b>
+                    <span class="retail-attention-row__arrow" aria-hidden="true">›</span>
+                  </button>
+                </li>
+              </ul>
+              <div v-else class="retail-empty">暂无来源已确认事项</div>
+            </section>
+          </details>
         </article>
       </div>
 
@@ -707,6 +716,24 @@ const kpiCards = computed(() => KPI_DEFINITIONS.map(definition => {
     emptyTitle: definition.emptyTitle
   };
 }));
+const creditLoanKpi = computed(() => {
+  const metric = kpiCards.value.find(item => item.key === 'retailLoan') || {
+    key: 'retailLoan', value: null, unit: '万元', isBound: false
+  };
+  return metric.isBound ? metric : { ...metric, emptyText: '暂无数据源' };
+});
+const creditNplRateKpi = computed(() => {
+  const metric = kpiCards.value.find(item => item.key === 'retailNplRate') || {
+    key: 'retailNplRate', value: null, unit: '%', isBound: false
+  };
+  return metric.isBound ? metric : { ...metric, emptyText: '暂无数据源' };
+});
+const creditLoanLabel = computed(() => creditLoanKpi.value.isBound
+  ? (creditLoanKpi.value.label || '贷款余额')
+  : '贷款余额');
+const creditNplRateLabel = computed(() => creditNplRateKpi.value.isBound
+  ? (creditNplRateKpi.value.label || '不良率')
+  : '不良率');
 const depositKpi = computed(() => findKpi('retailDeposit') || { key: 'retailDeposit', label: '储蓄余额', unit: '亿元', value: null, change: null });
 const depositAverage = computed(() => findKpi('retailDepositAverage') || { key: 'retailDepositAverage', label: '储蓄月日均', unit: '亿元', value: null, change: null });
 const displayDate = computed(() => safeModel.value.sourceQualities?.retailRanking?.dataDate
@@ -778,11 +805,6 @@ const institutionMetricValues = computed(() => institutionRows.value
   .map(row => institutionMetric.value === 'average' ? finiteValue(row?.average) : finiteValue(row?.deposit))
   .filter(value => value !== null));
 const institutionMetricUnit = computed(() => chooseAmountUnit(institutionMetricValues.value));
-const institutionDifferenceItems = computed(() => institutionRows.value
-  .filter(row => finiteValue(row?.difference) !== null && finiteValue(row.difference) < 0)
-  .sort((left, right) => left.difference - right.difference)
-  .slice(0, 3));
-const institutionDifferenceValues = computed(() => institutionDifferenceItems.value.map(row => row.difference));
 const attentionItems = computed(() => {
   const sourceItems = safeModel.value.attention.map(item => ({ ...item, isVerification: Boolean(item?.isVerification || item?.type === 'verification' || item?.kind === 'issue') }));
   const dateIssueCodes = new Set(['MIXED_DATES', 'DATE_MISMATCH']);
@@ -924,6 +946,16 @@ function displayKpi(kpi) {
   } else if(unit==='万户' && value!==0 && Math.abs(value)<1) {value*=10000;unit='户';}
   const text=new Intl.NumberFormat('en-US',{minimumFractionDigits:unit==='户'?0:2,maximumFractionDigits:value!==0&&Math.abs(value)<0.01?8:2}).format(value);
   return {text,unit};
+}
+
+function creditUnit(kpi) {
+  const display = displayKpi(kpi);
+  return display.unit || kpi?.unit || '单位待确认';
+}
+
+function metricDataDate(kpi) {
+  const date = kpi?.date || kpi?.dataDate || kpi?.periodDate;
+  return date === null || date === undefined || date === '' ? '日期待确认' : String(date);
 }
 
 function formatChange(value) {

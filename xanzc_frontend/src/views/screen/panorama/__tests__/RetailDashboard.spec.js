@@ -434,6 +434,59 @@ describe('RetailDashboard 零售经营总览', () => {
     expect(wrapper.get('[data-kpi-key="retailDepositAverage"]').text()).toContain('暂无数据源');
   });
 
+  it('左下替换为信贷规模与质量，沿用已有贷款与不良率值并显示各自日期', () => {
+    const wrapper = mountDashboard({ model: {
+      ...model,
+      dataDate: '2026-09-19',
+      kpis: [
+        { key: 'retailLoan', label: '个人及信用卡贷款余额（本级 · 测试）', value: 2173.19, unit: '万元', date: '2026-07-24' },
+        { key: 'retailNplRate', label: '零售信贷产品不良率（主库）', value: 57.11, unit: '%', date: '2026-07-24' }
+      ]
+    } });
+    const panel = wrapper.get('[data-testid="retail-credit-panel"]');
+    expect(panel.get('h2').text()).toBe('信贷规模与质量');
+    expect(panel.get('[data-credit-key="retailLoan"]').text()).toContain('个人及信用卡贷款余额');
+    expect(panel.get('[data-credit-key="retailLoan"]').text()).toContain('2,173.19');
+    expect(panel.get('[data-credit-key="retailLoan"]').text()).toContain('万元');
+    expect(panel.get('[data-testid="retail-credit-loan-date"]').text()).toContain('2026-07-24');
+    expect(panel.get('[data-credit-key="retailNplRate"]').text()).toContain('零售信贷产品不良率');
+    expect(panel.get('[data-credit-key="retailNplRate"]').text()).toContain('57.11');
+    expect(panel.get('[data-credit-key="retailNplRate"]').text()).toContain('%');
+    expect(panel.get('[data-testid="retail-credit-npl-date"]').text()).toContain('2026-07-24');
+    expect(panel.text()).not.toContain('2026-09-19');
+    expect(panel.text()).not.toContain('不良贷款金额');
+  });
+
+  it('绑定信贷标签沿用清理后的来源标签，未绑定时使用中性 fallback', () => {
+    const boundWrapper = mountDashboard({ model: {
+      ...model,
+      kpis: [
+        { key: 'retailLoan', label: '个人贷款（分类样本）', value: 1, unit: '亿元' },
+        { key: 'retailNplRate', label: '个贷不良率（贴息）', value: 2, unit: '%' }
+      ]
+    } });
+    expect(boundWrapper.get('[data-credit-key="retailLoan"] > span').text()).toBe('个人贷款');
+    expect(boundWrapper.get('[data-credit-key="retailNplRate"] > span').text()).toBe('个贷不良率（贴息）');
+
+    const unboundWrapper = mountDashboard({ model: { ...model, kpis: [] } });
+    expect(unboundWrapper.get('[data-credit-key="retailLoan"] > span').text()).toBe('贷款余额');
+    expect(unboundWrapper.get('[data-credit-key="retailNplRate"] > span').text()).toBe('不良率');
+  });
+
+  it('信贷面板保留有效 0、明确区分未绑定与无有效值，缺失日期不冒用页头日期', () => {
+    const wrapper = mountDashboard({ model: {
+      ...model,
+      dataDate: '2026-09-19',
+      kpis: [{ key: 'retailLoan', label: '个人贷款', value: 0, unit: '万元', date: '2026-07-24' }]
+    } });
+    const panel = wrapper.get('[data-testid="retail-credit-panel"]');
+    expect(panel.get('[data-credit-key="retailLoan"]').text()).toContain('0.00');
+    expect(panel.get('[data-testid="retail-credit-loan-date"]').text()).toContain('2026-07-24');
+    expect(panel.get('[data-credit-key="retailNplRate"]').text()).toContain('暂无数据源');
+    expect(panel.get('[data-testid="retail-credit-npl-date"]').text()).toContain('日期待确认');
+    expect(panel.text()).not.toContain('2026-09-19');
+  });
+
   it('机构存款对比默认筛选分行，切换月日均后显示口径差额而非净增', async () => {
     const wrapper = mountDashboard({ model: {
       ...model,
@@ -550,10 +603,9 @@ describe('RetailDashboard 零售经营总览', () => {
     ]);
   });
 
-  it('关注面板补充当前已分类机构的月均低于余额差额，点击仍打开机构存款详情', async () => {
+  it('移除经营关注中的日均与时点差额重复块，事项与数据核验保留为默认折叠轻入口', async () => {
     const wrapper = mountDashboard({ model: {
       ...model,
-      attention: [],
       issues: [],
       rankings: [
         { orgCode: 'P1', name: '甲分行', deposit: 100, average: 98, orgNature: 'PRIMARY' },
@@ -568,16 +620,17 @@ describe('RetailDashboard 零售经营总览', () => {
         { orgCode: 'P4', name: '丁分行' }
       ]
     } });
-    const panel = wrapper.get('[data-testid="retail-attention"]');
-    const list = panel.get('[data-testid="retail-attention-difference-list"]');
-    expect(list.text()).toContain('日均与时点差额关注');
-    expect(list.text()).toContain('乙分行');
-    expect(list.text()).toContain('-10.00');
-    expect(list.findAll('[data-testid="retail-attention-difference-row"]')).toHaveLength(3);
-    expect(list.text()).toContain('不代表净增');
-    await list.findAll('[data-testid="retail-attention-difference-row"]')[0].trigger('click');
-    expect(wrapper.get('[data-testid="retail-institution-dialog"]').text()).toContain('乙分行');
-    expect(wrapper.get('[data-testid="retail-institution-dialog"]').text()).toContain('月日均');
+    expect(wrapper.find('[data-testid="retail-attention-difference-list"]').exists()).toBe(false);
+    const entry = wrapper.get('[data-testid="retail-attention-entry"]');
+    expect(entry.get('summary').text()).toContain('经营事项与数据核验（2）');
+    expect(entry.element.open).toBe(false);
+    await entry.get('summary').trigger('click');
+    expect(entry.findAll('[data-testid="retail-attention-row"]')).toHaveLength(2);
+    await entry.findAll('[data-testid="retail-attention-row"]')[1].trigger('click');
+    expect(wrapper.get('[data-testid="retail-attention-detail"]').text()).toContain('风险数据待核验');
+    await wrapper.get('[data-action="close-retail-attention"]').trigger('click');
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('[data-testid="retail-attention-detail"]').exists()).toBe(false);
   });
 
 });

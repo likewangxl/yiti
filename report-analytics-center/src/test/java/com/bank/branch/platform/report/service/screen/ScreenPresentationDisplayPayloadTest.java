@@ -135,6 +135,24 @@ class ScreenPresentationDisplayPayloadTest {
                 .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_PUBLISHED_SNAPSHOT_UNTRUSTED.getCode());
     }
 
+    @Test
+    void periodComparisonsUseCurrentMetricCardComponentIds() throws Exception {
+        var root = (com.fasterxml.jackson.databind.node.ObjectNode) MAPPER.readTree(validJson());
+        root.set("periodComparisons", periodComparisonMap("deposit-card"));
+        CodeScreenPresentationValidator.validateCanvasStyle(root.toString());
+
+        ((com.fasterxml.jackson.databind.node.ObjectNode) root.path("presentation").path("display")
+                .path("components").get(0)).put("visible", false);
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(root.toString()))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+
+        ((com.fasterxml.jackson.databind.node.ObjectNode) root.path("presentation").path("display")
+                .path("components").get(0)).put("visible", true);
+        root.set("periodComparisons", periodComparisonMap("arbitrary-script"));
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(root.toString()))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+    }
+
     private void assertInvalid(String json) {
         assertThatThrownBy(() -> CodeScreenPresentationValidator.validateCanvasStyle(json))
                 .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
@@ -213,6 +231,13 @@ class ScreenPresentationDisplayPayloadTest {
     private String bindJson() {
         return "{\"dsId\":12,\"period\":\"LATEST\",\"fields\":{\"value\":\"balance\"},"
                 + "\"units\":{\"value\":\"YUAN\"}}";
+    }
+
+    private JsonNode periodComparisonMap(String key) throws Exception {
+        return MAPPER.readTree("{\"" + key + "\":{"
+                + "\"day\":{\"mode\":\"UNSET\",\"metricCode\":\"\",\"outputColumn\":\"\",\"unit\":\"\",\"tableName\":\"\"},"
+                + "\"month\":{\"mode\":\"UNSET\",\"metricCode\":\"\",\"outputColumn\":\"\",\"unit\":\"\",\"tableName\":\"\"},"
+                + "\"year\":{\"mode\":\"UNSET\",\"metricCode\":\"\",\"outputColumn\":\"\",\"unit\":\"\",\"tableName\":\"\"}}}");
     }
 
     private String quote(String value) {

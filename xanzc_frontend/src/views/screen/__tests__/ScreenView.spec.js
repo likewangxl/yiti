@@ -85,7 +85,8 @@ describe('ScreenView.vue', () => {
     wrapper = mount(ScreenView, { global: { stubs } });
     await flushPromises();
     expect(wrapper.find('.stub-panorama-runtime').attributes('data-back-path')).toBe('/screens');
-    expect(wrapper.find('[data-testid="screen-draft-preview"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="screen-draft-preview"]').text()).toContain('未发布草稿预览');
+    expect(wrapper.find('[data-testid="screen-test-data-notice"]').exists()).toBe(false);
 
     wrapper.unmount();
     routeState.query = { preview: 'draft' };
@@ -97,7 +98,8 @@ describe('ScreenView.vue', () => {
     wrapper = mount(ScreenView, { global: { stubs } });
     await flushPromises();
     expect(wrapper.find('.stub-panorama-runtime').attributes('data-back-path')).toBe('');
-    expect(wrapper.find('[data-testid="screen-draft-preview"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="screen-draft-preview"]').text()).toContain('未发布草稿预览');
+    expect(wrapper.find('[data-testid="screen-test-data-notice"]').exists()).toBe(false);
   });
 
   it('后端返回正式态时即使 URL 带 preview=draft 也继续显示标题', async () => {
@@ -166,7 +168,7 @@ describe('ScreenView.vue', () => {
     expect(wrapper.find('.stub-panorama-runtime').attributes('data-batch-required')).toBe('true');
   });
 
-  it('未发布分行 CODE 模板隐藏草稿横幅，但保留后端确认的草稿身份和批次要求', async () => {
+  it('未发布分行 CODE 模板显示草稿横幅并保留后端确认的草稿身份和批次要求', async () => {
     routeState.query = { preview: 'draft' };
     getScreenViewMock.mockResolvedValue({
       screenName: '草稿分行总览', state: 'draft',
@@ -174,12 +176,41 @@ describe('ScreenView.vue', () => {
     });
     wrapper = mount(ScreenView, { global: { stubs } });
     await flushPromises();
-    expect(wrapper.find('[data-testid="screen-draft-preview"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="screen-draft-preview"]').text()).toContain('未发布草稿预览');
     expect(JSON.parse(wrapper.find('.stub-panorama-runtime').attributes('data-context')).previewState).toBe('draft');
     expect(wrapper.find('.stub-panorama-runtime').attributes('data-batch-required')).toBe('true');
   });
 
-  it('未发布零售 CODE 模板仍保留草稿横幅，范围不扩展到其他全景模板', async () => {
+  it('服务端 TEST 分类只在草稿预览中显示已有记录声明', async () => {
+    routeState.query = { preview: 'draft' };
+    getScreenViewMock.mockResolvedValue({
+      screenName: '草稿分行总览', state: 'draft',
+      renderPackageJson: JSON.stringify({ canvasStyle: {
+        dataClassification: 'TEST',
+        presentation: { type: 'CODE', template: 'branch-overview-v1' }
+      }, components: [] })
+    });
+    wrapper = mount(ScreenView, { global: { stubs } });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="screen-draft-preview"]').text()).toContain('未发布草稿预览');
+    expect(wrapper.find('[data-testid="screen-test-data-notice"]').text())
+      .toBe('测试数据 · 仅使用已有记录，非真实经营数据');
+
+    wrapper.unmount();
+    getScreenViewMock.mockResolvedValue({
+      screenName: '已发布测试分行总览', state: 'published',
+      renderPackageJson: JSON.stringify({ canvasStyle: {
+        dataClassification: 'TEST',
+        presentation: { type: 'CODE', template: 'branch-overview-v1' }
+      }, components: [] })
+    });
+    wrapper = mount(ScreenView, { global: { stubs } });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="screen-draft-preview"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="screen-test-data-notice"]').exists()).toBe(false);
+  });
+
+  it('未发布零售 CODE 模板显示普通草稿横幅，不宣称 TEST 数据', async () => {
     routeState.query = { preview: 'draft' };
     getScreenViewMock.mockResolvedValue({
       screenName: '零售草稿总览', state: 'draft',
@@ -188,6 +219,7 @@ describe('ScreenView.vue', () => {
     wrapper = mount(ScreenView, { global: { stubs } });
     await flushPromises();
     expect(wrapper.find('[data-testid="screen-draft-preview"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="screen-test-data-notice"]').exists()).toBe(false);
   });
 
   it('零售模板使用独立全景运行入口，保留 RETAIL 与已发布数据身份', async () => {

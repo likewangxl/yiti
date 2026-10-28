@@ -6,6 +6,10 @@ const fixture = vi.hoisted(() => ({
   screen: { id: 19, screenCode: 'SCR_VERIFY', screenName: '核验屏', bizLine: 'COMMON', orgScopeMode: 'LEGACY_CONTEXT', status: 'ACTIVE' },
   binding: { dsId: 77, period: 'LATEST', fields: { value: 'balance' }, units: { value: 'YUAN' } }
 }));
+const { permissionStore } = vi.hoisted(() => ({ permissionStore: {
+  loaded: true, canAccess: vi.fn(() => true), load: vi.fn()
+} }));
+vi.mock('@/stores/permission', () => ({ usePermissionStore: () => permissionStore }));
 vi.mock('@/api/screen', () => ({
   listScreens: vi.fn(async () => [fixture.screen]),
   getScreenCanvas: vi.fn(async () => ({

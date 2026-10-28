@@ -8,7 +8,7 @@ vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn(), back: vi.fn() 
 vi.mock('../usePanoramaData', () => ({ usePanoramaData: () => harness.state }));
 vi.mock('../PanoramaDashboard.vue', () => ({ default: {
   name: 'DashboardProbe',
-  props: ['model', 'sourcePresentation'],
+  props: ['model', 'sourcePresentation', 'loading', 'error'],
   template: '<main data-testid="dashboard-probe">{{ JSON.stringify(model.blockResults) }}</main>'
 } }));
 vi.mock('../CorporateDashboard.vue', () => ({ default: { template: '<main>对公</main>' } }));
@@ -34,8 +34,8 @@ beforeEach(() => {
   };
 });
 
-describe('分行 TEST 草稿演示补齐', () => {
-  it('演示状态展开旧业务结构的收入绑定，切换服务端分类后恢复原配置且不修改发布包', async () => {
+describe('分行大屏运行态不合成指标数据', () => {
+  it('不扩展收入绑定或补齐构成数据，切换服务端分类时保留源配置', async () => {
     const currentView = view();
     currentView.renderPackage.canvasStyle.presentation.display.components.push({
       componentId: 'legacy-composition-64', componentType: 'COMPOSITION_TABS', layoutRegion: 'LEFT', visible: true,
@@ -48,9 +48,10 @@ describe('分行 TEST 草稿演示补齐', () => {
     const wrapper = mount(PanoramaRuntime, { props: { view: currentView } });
     const probe = () => wrapper.getComponent({ name: 'DashboardProbe' });
     const tabs = () => probe().props('sourcePresentation').displayPresentation.display.components[1].content.tabs;
-    expect(tabs().find(tab => tab.tabKey === 'income')?.corporateField).toBe('测试_直营对公营业收入');
-    expect(probe().props('model').blockResults[64].测试_直营对公营业收入).toBe(600);
-    expect(probe().props('model').blockResults[64].测试_直营零售营业收入).toBe(400);
+    expect(tabs()).toHaveLength(1);
+    expect(tabs().find(tab => tab.tabKey === 'income')).toBeUndefined();
+    expect(probe().props('model').blockResults[64].测试_直营对公营业收入).toBeUndefined();
+    expect(probe().props('model').blockResults[64].测试_直营零售营业收入).toBeUndefined();
     const liveView = view('LIVE');
     liveView.renderPackage.canvasStyle.presentation.display.components.push(currentView.renderPackage.canvasStyle.presentation.display.components[1]);
     await wrapper.setProps({ view: liveView });
@@ -60,23 +61,55 @@ describe('分行 TEST 草稿演示补齐', () => {
     wrapper.unmount();
   });
 
-  it('默认补齐空字段但不显示补齐说明，切换分类后恢复源值，源模型保持不变', async () => {
+  it('TEST 草稿保留真实值和缺值，不派生完成率、收入、结算存款、历史或年度比较', async () => {
+    const currentView = view();
+    const components = currentView.renderPackage.canvasStyle.presentation.display.components;
+    components.push(
+      { componentId: 'fee-card', componentType: 'METRIC_CARD', layoutRegion: 'HEADER', visible: true,
+        content: { mainField: '测试_直营中间业务收入' }, dataRefs: [{ blockId: 31, unit: 'YUAN' }] },
+      { componentId: 'legacy-composition-64', componentType: 'COMPOSITION_TABS', layoutRegion: 'LEFT', visible: true,
+        content: { tabs: [{ tabKey: 'business-structure', corporateField: '测试_直营对公存款',
+          retailField: '测试_直营零售存款', totalField: '', unit: 'YUAN' }] },
+        dataRefs: [{ blockId: 64, role: 'PRIMARY', unit: 'YUAN' }] },
+      { componentId: 'trend-57', componentType: 'TREND', layoutRegion: 'CENTER', visible: true,
+        dataRefs: [{ blockId: 57, role: 'PRIMARY' }] }
+    );
+    const sourceModel = harness.state.model.value;
+    sourceModel.blockResults[31] = {
+      测试_对公存款目标完成率: 0,
+      测试_直营营业收入: 1000,
+      rows: [{ data_date: '2026-09-21', 测试_对公存款目标完成率: 0, 测试_直营营业收入: 1000 }]
+    };
+    sourceModel.blockResults[64] = {
+      测试_直营营业收入: 1000,
+      rows: [{ data_date: '2026-09-21', 测试_直营营业收入: 1000 }]
+    };
+    sourceModel.blockResults[57] = { rows: [{ data_date: '2026-09-21' }] };
+    sourceModel.kpis = [{ key: 'deposit', value: 100, unit: 'YUAN', dataDate: '2026-09-21', comparisons: {} }];
     const original = JSON.stringify(harness.state.model.value);
-    const wrapper = mount(PanoramaRuntime, { props: { view: view() } });
+    const originalPresentation = JSON.stringify(currentView.renderPackage.canvasStyle.presentation);
+    const wrapper = mount(PanoramaRuntime, { props: { view: currentView } });
+    const probe = wrapper.getComponent({ name: 'DashboardProbe' });
+    const output = probe.props('model');
     expect(wrapper.find('[data-testid="branch-demo-supplement"]').exists()).toBe(false);
-    expect(wrapper.get('[data-testid="dashboard-probe"]').text()).toContain('93.6');
+    expect(output.blockResults[31]['测试_对公存款目标完成率']).toBe(0);
+    expect(output.blockResults[31].rows[0]['测试_直营中间业务收入']).toBeUndefined();
+    expect(output.blockResults[31]['对公结算性存款余额-机构']).toBeUndefined();
+    expect(output.blockResults[31]['零售结算性存款余额-机构']).toBeUndefined();
+    expect(output.blockResults[64]['测试_直营对公营业收入']).toBeUndefined();
+    expect(output.blockResults[64]['测试_直营零售营业收入']).toBeUndefined();
+    expect(output.blockResults[57].rows).toHaveLength(1);
+    expect(output.blockResults[57].rows[0]['对公结算性存款余额-机构']).toBeUndefined();
+    expect(output.kpis[0].comparisons).toEqual({});
+    expect(JSON.stringify(output)).not.toContain('93.6');
     expect(JSON.stringify(harness.state.model.value)).toBe(original);
-    await wrapper.setProps({ view: view('LIVE') });
-    expect(wrapper.get('[data-testid="dashboard-probe"]').text()).not.toContain('93.6');
-    await wrapper.setProps({ view: view() });
-    expect(wrapper.get('[data-testid="dashboard-probe"]').text()).toContain('93.6');
-    expect(wrapper.find('[data-testid="branch-demo-supplement"]').exists()).toBe(false);
+    expect(JSON.stringify(currentView.renderPackage.canvasStyle.presentation)).toBe(originalPresentation);
     wrapper.unmount();
   });
 
-  it('TEST 分行 schema1 已发布且全辖时仍保留新版演示补齐', () => {
+  it('TEST 分行 schema1 已发布且全辖时仍不补充指标', () => {
     const wrapper = mount(PanoramaRuntime, { props: { view: view('TEST', 'published') } });
-    expect(wrapper.get('[data-testid="dashboard-probe"]').text()).toContain('93.6');
+    expect(wrapper.get('[data-testid="dashboard-probe"]').text()).not.toContain('93.6');
     wrapper.unmount();
   });
 
@@ -124,6 +157,8 @@ describe('分行 TEST 草稿演示补齐', () => {
     const wrapper = mount(PanoramaRuntime, { props: { view: view() } });
     expect(wrapper.find('[data-testid="branch-demo-supplement"]').exists()).toBe(false);
     expect(wrapper.text()).not.toContain('93.6');
+    if (kind === 'loading') expect(wrapper.getComponent({ name: 'DashboardProbe' }).props('loading')).toBe(true);
+    if (kind === 'error') expect(wrapper.getComponent({ name: 'DashboardProbe' }).props('error')).toBe('数据查询失败');
     wrapper.unmount();
   });
 });
