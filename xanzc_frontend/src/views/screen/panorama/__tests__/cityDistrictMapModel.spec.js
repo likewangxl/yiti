@@ -61,7 +61,7 @@ describe('cityDistrictMapModel', () => {
     expect(result.hasUnknownLocations).toBe(false);
     expect(result.viewFit.focusRegionCodes).toEqual(['D-A', 'D-B']);
     expect(result.viewFit.focusCenterMode).toBe('OCCUPIED_BOUNDS');
-    expect(result.viewFit.initialZoom).toBe(3.3);
+    expect(result.viewFit.initialZoom).toBe(1.65);
     expect(result.viewFit.focusCenter).toEqual({ lng: 1, lat: 0.5 });
   });
 
@@ -87,7 +87,7 @@ describe('cityDistrictMapModel', () => {
     expect(Object.values(result.districtColors)).toEqual([MAP_MISSING_COLOR, MAP_MISSING_COLOR, MAP_MISSING_COLOR]);
     expect(result.occupiedRegionCodes).toEqual([]);
     expect(result.viewFit.focusRegionCodes).toEqual([]);
-    expect(result.viewFit.initialZoom).toBe(2);
+    expect(result.viewFit.initialZoom).toBe(1);
   });
 
   it('空目录保留当前授权范围待确认态，避免把全局无机构误报成区县无机构', () => {
@@ -96,13 +96,13 @@ describe('cityDistrictMapModel', () => {
     expect(result.regionStates).toEqual({ 'D-A': 'MISSING', 'D-B': 'MISSING', 'D-C': 'MISSING' });
     expect(result.occupiedRegionCodes).toEqual([]);
     expect(result.hasUnknownLocations).toBe(false);
-    expect(result.viewFit).toEqual({ focusRegionCodes: [], initialZoom: 2 });
+    expect(result.viewFit).toEqual({ focusRegionCodes: [], initialZoom: 1 });
   });
 
-  it('缺少 geo 边界时也使用 2 倍默认缩放', () => {
+  it('缺少 geo 边界时保留原始默认缩放', () => {
     const result = buildCityDistrictMapState(null, []);
 
     expect(result.districtColors).toEqual({});
-    expect(result.viewFit).toEqual({ focusRegionCodes: [], initialZoom: 2 });
+    expect(result.viewFit).toEqual({ focusRegionCodes: [], initialZoom: 1 });
   });
 });

@@ -207,7 +207,7 @@ describe('PresentationMapWidget', () => {
     expect(map.props('regionStates')).toMatchObject({ 'D-A': 'HAS_INSTITUTION', 'D-B': 'NO_INSTITUTION' });
     expect(map.props('metricColors')).toEqual({ 'D-A': cityDistrictColors(['D-A', 'D-B'])['D-A'], 'D-B': '#26364d' });
     expect(map.props('showRegionMetrics')).toBe(false);
-    expect(map.props('viewFit')).toMatchObject({ focusRegionCodes: ['D-A'], initialZoom: 3.3 });
+    expect(map.props('viewFit')).toMatchObject({ focusRegionCodes: ['D-A'], initialZoom: 1.65 });
     expect(wrapper.get('[data-testid="presentation-map-legend-district-colors"]').text()).toBe('有经营机构区县');
     expect(wrapper.get('[data-testid="presentation-map-legend-district-colors"] i').attributes('style')).toContain('linear-gradient');
     expect(wrapper.get('[data-testid="presentation-map-legend-no-institution"]').text()).toBe('无经营机构');
@@ -250,7 +250,7 @@ describe('PresentationMapWidget', () => {
       global: { stubs: { PanoramaMap: mapStub } }
     });
 
-    expect(wrapper.getComponent(mapStub).props('viewFit')).toMatchObject({ initialZoom: 2 });
+    expect(wrapper.getComponent(mapStub).props('viewFit')).toMatchObject({ initialZoom: 1 });
     wrapper.unmount();
   });
 

@@ -159,7 +159,7 @@ function featureCenter(polygons) {
 }
 
 function emptyViewFit() {
-  return { focusRegionCodes: [], initialZoom: 2 };
+  return { focusRegionCodes: [], initialZoom: 1 };
 }
 
 /**
@@ -218,7 +218,7 @@ export function buildCityDistrictMapState(geoJson, institutions, { demo = false 
     if (centers.length) {
       viewFit.focusRegionCodes = occupiedRegionCodes;
       viewFit.focusCenterMode = 'OCCUPIED_BOUNDS';
-      viewFit.initialZoom = 3.3;
+      viewFit.initialZoom = 1.65;
       viewFit.focusCenter = centers.reduce((center, item) => ({
         lng: center.lng + item.lng / centers.length,
         lat: center.lat + item.lat / centers.length
