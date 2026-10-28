@@ -312,6 +312,7 @@ import {
 import { createMapCalloutPath, layoutMapCallouts, layoutMapLabels, layoutPointCallouts } from './mapLabelLayout';
 import { positionCityTooltip } from './mapCityTooltipLayout';
 import { provinceCityColor } from './provinceCityPalette';
+import { MAP_MISSING_COLOR, MAP_NO_INSTITUTION_COLOR } from '../presentation/map/mapModel';
 import { pickInteractiveHit, pickRegionSurfaceHit } from './panoramaMapHit';
 const props = defineProps({
   geoJson: { type: Object, default: () => ({ type: 'FeatureCollection', features: [] }) },
@@ -395,12 +396,13 @@ const reliefConfig = computed(() => createReliefGeometryConfig({
 }));
 const cityFocus = computed(() => {
   if (props.mode !== 'city') return { active: false, zoom: 1, center: { x: 0, y: 0 } };
+  const configuredZoom = configuredCityZoom();
   const codes = Array.isArray(props.viewFit?.focusRegionCodes)
     ? props.viewFit.focusRegionCodes.map(code => String(code)).filter(Boolean)
     : [];
-  if (!codes.length) return { active: false, zoom: 1, center: { x: 0, y: 0 } };
+  if (!codes.length) return { active: false, zoom: configuredZoom ?? 1, center: { x: 0, y: 0 } };
   const focusedRegions = projectedRegions.value.filter(region => codes.includes(String(region.code)));
-  if (!focusedRegions.length) return { active: false, zoom: 1, center: { x: 0, y: 0 } };
+  if (!focusedRegions.length) return { active: false, zoom: configuredZoom ?? 1, center: { x: 0, y: 0 } };
   const rawCenter = props.viewFit?.focusCenter;
   const pair = Array.isArray(rawCenter)
     ? rawCenter
@@ -416,16 +418,26 @@ const cityFocus = computed(() => {
         x: result.x + point.x / points.length,
         y: result.y + point.y / points.length
       }), { x: 0, y: 0 });
-  const initialZoom = Number(props.viewFit?.initialZoom);
   return {
     active: Number.isFinite(center.x) && Number.isFinite(center.y),
-    zoom: Number.isFinite(initialZoom) ? Math.min(2, Math.max(1, initialZoom)) : 1.65,
+    zoom: configuredZoom ?? 1.65,
     center
   };
 });
+
+function configuredCityZoom() {
+  const rawZoom = props.viewFit?.initialZoom;
+  if (rawZoom === null || rawZoom === undefined) return null;
+  if (typeof rawZoom !== 'number' && typeof rawZoom !== 'string') return null;
+  if (typeof rawZoom === 'string' && !rawZoom.trim()) return null;
+  const initialZoom = Number(rawZoom);
+  if (!Number.isFinite(initialZoom) || initialZoom <= 0) return null;
+  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, initialZoom));
+}
+
 function applyDefaultFocus() {
   const focus = cityFocus.value;
-  zoom.value = focus.active ? focus.zoom : 1;
+  zoom.value = props.mode === 'city' ? focus.zoom : focus.active ? focus.zoom : 1;
   viewCenter.value = focus.active ? { ...focus.center } : { x: 0, y: 0 };
   focusedPoint = focus.active;
 }
@@ -780,12 +792,27 @@ function metricStyle(region) {
     return { fill: active ? highlightCityColor(baseColor) : baseColor, '--city-color': baseColor };
   }
   if (!props.colorByMetric) return undefined;
-  const color = props.metricColors?.[region.code] || '#65738a';
+  const color = metricColorForCode(region.code);
+  if (props.mode === 'city') {
+    const active = String(region.code) === String(hoveredRegionCode.value)
+      || String(region.code) === String(props.selectedRegionCode);
+    const state = metricState(region);
+    return {
+      fill: active ? highlightCityColor(color) : color,
+      stroke: active ? '#f3c8ff' : undefined,
+      strokeWidth: active ? 0.65 : undefined,
+      strokeDasharray: state === 'NO_INSTITUTION' ? '.72 .46' : state === 'MISSING' ? '.16 .42' : undefined
+    };
+  }
   return { fill: color };
 }
 
 function metricColorForCode(code) {
-  return props.metricColors?.[code] || '#65738a';
+  if (props.mode === 'city') {
+    if (props.regionStates?.[code] === 'NO_INSTITUTION') return MAP_NO_INSTITUTION_COLOR;
+    if (props.regionStates?.[code] === 'MISSING') return MAP_MISSING_COLOR;
+  }
+  return props.metricColors?.[code] || MAP_MISSING_COLOR;
 }
 
 function cityStateForCode(code) {
@@ -881,38 +908,34 @@ const cityDetailStyle = computed(() => {
   const rect = containerRef.value?.getBoundingClientRect();
   if (!rect || !activeCityDetail.value) return {};
   const width = Math.min(304, window.innerWidth - 24);
-  if (props.cityDetailMode === 'institutions' && isCalloutLayout.value) {
-    const code = String(activeCityDetail.value.region.code);
-    const label = [...(containerRef.value.querySelectorAll('.panorama-map__region-label-hit[data-city-code]') || [])]
-      .find(element => String(element.getAttribute('data-city-code')) === code);
-    const excludedRect = containerRef.value.closest?.('.presentation-map-widget')?.getBoundingClientRect?.()
-      || containerRef.value.closest?.('.panorama-map-panel')?.getBoundingClientRect?.()
-      || rect;
-    const position = positionCityTooltip({
-      mapRect: excludedRect,
-      labelRect: label?.getBoundingClientRect?.() || rect,
-      tooltipWidth: width,
-      tooltipHeight: cityDetailHeight.value,
-      viewport: { width: window.innerWidth, height: window.innerHeight },
-      side: calloutLayout.value[activeCityDetail.value.region.key]?.side,
-      gap: 10,
-      margin: 12
-    });
-    if (!position) return { display: 'none' };
-    return {
-      ...cityAccentStyle(activeCityDetail.value.region),
-      width: `${position.width}px`,
-      left: `${position.left}px`,
-      top: `${position.top}px`,
-      maxHeight: `${position.maxHeight}px`,
-      overflowY: 'auto'
-    };
-  }
+  const code = String(activeCityDetail.value.region.code);
+  const label = [...(containerRef.value.querySelectorAll('.panorama-map__region-label-hit[data-city-code]') || [])]
+    .find(element => String(element.getAttribute('data-city-code')) === code);
+  const labelRect = label?.getBoundingClientRect?.() || rect;
+  const excludedRect = containerRef.value.closest?.('.presentation-map-widget')?.getBoundingClientRect?.()
+    || containerRef.value.closest?.('.panorama-map-panel')?.getBoundingClientRect?.()
+    || rect;
+  const inlineSide = labelRect.left + labelRect.width / 2 <= rect.left + rect.width / 2 ? 'left' : 'right';
+  const position = positionCityTooltip({
+    mapRect: excludedRect,
+    labelRect,
+    tooltipWidth: width,
+    tooltipHeight: cityDetailHeight.value,
+    viewport: { width: window.innerWidth, height: window.innerHeight },
+    side: isCalloutLayout.value
+      ? calloutLayout.value[activeCityDetail.value.region.key]?.side
+      : inlineSide,
+    gap: 10,
+    margin: 12
+  });
+  if (!position) return { display: 'none' };
   return {
     ...cityAccentStyle(activeCityDetail.value.region),
-    width: `${width}px`,
-    left: `${Math.max(12, Math.min(window.innerWidth - width - 12, rect.left + rect.width / 2 - width / 2))}px`,
-    top: `${Math.max(12, Math.min(window.innerHeight - cityDetailHeight.value - 12, rect.top + rect.height / 2 - cityDetailHeight.value / 2))}px`
+    width: `${position.width}px`,
+    left: `${position.left}px`,
+    top: `${position.top}px`,
+    maxHeight: `${position.maxHeight}px`,
+    overflowY: 'auto'
   };
 });
 
@@ -1634,7 +1657,9 @@ function leaveHoveredRegion() {
 }
 function setHoveredRegion(code) {
   keepCityDetail();
-  const next = (reliefEnabled.value || isCalloutLayout.value) && code ? String(code) : '';
+  const next = (reliefEnabled.value || isCalloutLayout.value || (props.mode === 'city' && fallbackActive.value)) && code
+    ? String(code)
+    : '';
   if (next === hoveredRegionCode.value) return;
   hoveredRegionCode.value = next;
   regionSurfaces.forEach(mesh => {
@@ -1920,6 +1945,8 @@ onBeforeUnmount(() => {
 .panorama-map__controls button:hover, .panorama-map__controls button:focus-visible { border-color: #82f4ff; outline: 2px solid rgba(130, 244, 255, .5); }
 .panorama-map__controls button:disabled { cursor: not-allowed; opacity: .42; }
 .panorama-map__fallback-status { position: absolute; z-index: 4; left: 14px; bottom: 12px; max-width: calc(100% - 100px); margin: 0; color: rgba(194, 221, 255, .78); font-size: 11px; pointer-events: none; }
+/* 区县分类色较亮，提示保留深色衬底以维持文字对比。 */
+.panorama-map[data-mode='city'] .panorama-map__fallback-status { padding: 4px 7px; border: 1px solid rgba(119, 163, 255, .25); border-radius: 4px; color: #d4e8ff; background: rgba(3, 13, 32, .86); line-height: 1.5; }
 .panorama-map__activation-status { position: absolute; z-index: 5; left: 14px; bottom: 30px; max-width: calc(100% - 100px); margin: 0; color: #ffc45e; font-size: 12px; pointer-events: none; }
 .panorama-map__empty { position: absolute; z-index: 4; inset: 50% auto auto 50%; transform: translate(-50%, -50%); margin: 0; color: rgba(194, 221, 255, .82); font-size: 13px; white-space: nowrap; }
 .panorama-map__unmapped { position: absolute; z-index: 6; bottom: 42px; left: 12px; max-width: min(245px, 50%); margin: 0; padding: 8px 10px; border: 1px solid rgba(255, 181, 79, .5); border-radius: 6px; background: rgba(28, 25, 57, .86); color: #ffe2a8; font-size: 11px; }

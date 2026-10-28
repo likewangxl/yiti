@@ -6,6 +6,10 @@ const fixture = vi.hoisted(() => ({
   screen: { id: 19, screenCode: 'SCR_VERIFY', screenName: '核验屏', bizLine: 'COMMON', orgScopeMode: 'LEGACY_CONTEXT', status: 'ACTIVE' },
   binding: { dsId: 77, period: 'LATEST', fields: { value: 'balance' }, units: { value: 'YUAN' } }
 }));
+const { permissionStore } = vi.hoisted(() => ({ permissionStore: {
+  loaded: true, canAccess: vi.fn(() => true), load: vi.fn()
+} }));
+vi.mock('@/stores/permission', () => ({ usePermissionStore: () => permissionStore }));
 vi.mock('@/api/screen', () => ({
   listScreens: vi.fn(async () => [fixture.screen]),
   getScreenCanvas: vi.fn(async () => ({
@@ -17,7 +21,8 @@ vi.mock('@/api/screen', () => ({
   listScreenDatasources: vi.fn(async () => [{ id: 77, dsName: '余额来源', status: 'ACTIVE', bizLine: 'COMMON', sourceKind: 'WIDE_TABLE',
     configJson: JSON.stringify({ fieldMeta: [{ col: 'balance', role: 'METRIC', unit: '元' }] }) }]),
   getScreenView: vi.fn(), queryScreenData: vi.fn(), saveScreenCanvas: vi.fn(),
-  publishScreenCanvas: vi.fn(), discardScreenCanvas: vi.fn(), listOrgProfiles: vi.fn(), listOrgGroups: vi.fn()
+  publishScreenCanvas: vi.fn(), discardScreenCanvas: vi.fn(), listOrgProfiles: vi.fn(), listOrgGroups: vi.fn(),
+  listScreenMetricCatalog: vi.fn(async () => []), saveScreenDatasource: vi.fn(), tryRunScreenDatasource: vi.fn()
 }));
 vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }), useRouter: () => ({ push: vi.fn() }) }));
 vi.mock('../PanoramaDataVerification.vue', () => ({ default: {

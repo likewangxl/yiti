@@ -117,6 +117,38 @@ class CanvasStyleDTOJsonContractTest {
     }
 
     @Test
+    void acceptsAndSerializesPeriodComparisonsAtCanvasStyleRoot() throws Exception {
+        String json = """
+                {
+                  "periodComparisons": {
+                    "overview-deposit": {
+                      "day": {"mode":"METRIC","metricCode":"M_0266","outputColumn":"较昨日","unit":"YUAN","tableName":"ORG_INDEX_RESULT"},
+                      "month": {"mode":"UNSET","metricCode":"","outputColumn":"","unit":"","tableName":""},
+                      "year": {"mode":"UNSET","metricCode":"","outputColumn":"","unit":"","tableName":""}
+                    }
+                  }
+                }
+                """;
+
+        CanvasStyleDTO actual = objectMapper.readValue(json, CanvasStyleDTO.class);
+
+        assertThat(objectMapper.valueToTree(actual).path("periodComparisons")
+                .path("overview-deposit").path("day").path("metricCode").asText())
+                .isEqualTo("M_0266");
+    }
+
+    @Test
+    void rejectsNullPeriodComparisonSlotFieldsAtDtoBoundary() {
+        assertThatThrownBy(() -> objectMapper.readValue(
+                "{\"periodComparisons\":{\"overview-deposit\":{"
+                        + "\"day\":{\"mode\":null,\"metricCode\":\"\",\"outputColumn\":\"\",\"unit\":\"\",\"tableName\":\"\"},"
+                        + "\"month\":{\"mode\":\"UNSET\",\"metricCode\":\"\",\"outputColumn\":\"\",\"unit\":\"\",\"tableName\":\"\"},"
+                        + "\"year\":{\"mode\":\"UNSET\",\"metricCode\":\"\",\"outputColumn\":\"\",\"unit\":\"\",\"tableName\":\"\"}}}}",
+                CanvasStyleDTO.class))
+                .isInstanceOf(com.fasterxml.jackson.databind.JsonMappingException.class);
+    }
+
+    @Test
     void rejectsUnknownSourceAvailabilityStatusAndNestedFields() {
         assertThatThrownBy(() -> objectMapper.readValue(
                 "{\"sourceAvailability\":{\"deposit\":{\"status\":\"UNKNOWN\"}}}", CanvasStyleDTO.class))

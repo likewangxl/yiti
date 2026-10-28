@@ -4,6 +4,7 @@ import {
   MAP_NO_INSTITUTION_COLOR,
   MAP_PALETTE
 } from '../presentation/map/mapModel';
+import { cityDistrictColors } from './cityDistrictPalette.js';
 
 export const CITY_DISTRICT_HAS_INSTITUTION_COLOR = MAP_PALETTE.mid;
 
@@ -199,6 +200,11 @@ export function buildCityDistrictMapState(geoJson, institutions, { demo = false 
     code,
     occupied.has(code) ? 'HAS_INSTITUTION' : hasCompleteDirectory ? 'NO_INSTITUTION' : 'MISSING'
   ]));
+  const palette = cityDistrictColors(codes);
+  const districtColors = Object.fromEntries(codes.map(code => [code,
+    regionStates[code] === 'HAS_INSTITUTION' ? palette[code]
+      : regionStates[code] === 'NO_INSTITUTION' ? MAP_NO_INSTITUTION_COLOR : MAP_MISSING_COLOR
+  ]));
   const metricColors = Object.fromEntries(codes.map(code => {
     const state = regionStates[code];
     return [code, state === 'HAS_INSTITUTION'
@@ -220,7 +226,7 @@ export function buildCityDistrictMapState(geoJson, institutions, { demo = false 
     }
   }
 
-  return { regionStates, metricColors, occupiedRegionCodes, viewFit, hasUnknownLocations };
+  return { regionStates, metricColors, districtColors, occupiedRegionCodes, viewFit, hasUnknownLocations };
 }
 
 export default buildCityDistrictMapState;

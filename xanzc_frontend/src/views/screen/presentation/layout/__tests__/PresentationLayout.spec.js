@@ -803,6 +803,84 @@ describe('PresentationLayout', () => {
     expect(wrapper.get('[data-summary-key="deposit"] [data-bar-key="year"]').text()).toContain('待接入');
   });
 
+  it('指标库期间比较有结果时总览条不再待接入，未绑定槽位保持待接入', () => {
+    const wrapper = mount(PresentationLayout, {
+      props: {
+        draftOverview: true,
+        amountUnit: 'HUNDRED_MILLION',
+        presentation: {
+          displaySchemaVersion: 1,
+          template: 'branch-overview-v1',
+          display: { components: [] }
+        },
+        model: {
+          dataDate: '2026-10-15',
+          kpis: [{ key: 'deposit', value: 1000, unit: 'HUNDRED_MILLION', dataDate: '2026-10-15' }],
+          periodComparisonConfig: {
+            'overview-deposit': {
+              day: { mode: 'METRIC', metricCode: 'M_0266', outputColumn: '较昨日增量', unit: 'HUNDRED_MILLION', tableName: 'ORG_INDEX_RESULT' },
+              month: { mode: 'UNSET' },
+              year: { mode: 'UNSET' }
+            }
+          },
+          periodComparisonSources: {
+            'overview-deposit': [{ data_date: '2026-10-15', 较昨日增量: 10 }]
+          }
+        }
+      },
+      global: { stubs }
+    });
+    mounted.push(wrapper);
+    expect(wrapper.get('[data-summary-key="deposit"] [data-bar-key="day"]').text()).toContain('990.00亿元');
+    expect(wrapper.get('[data-summary-key="deposit"] [data-bar-key="day"]').text()).not.toContain('待接入');
+    expect(wrapper.get('[data-summary-key="deposit"] [data-bar-key="month"]').text()).toContain('待接入');
+  });
+
+  it('总览和结算性存款关闭显式比较时优先于目录比较，不覆盖为目录差值', () => {
+    const wrapper = mount(PresentationLayout, {
+      props: {
+        draftOverview: true,
+        amountUnit: 'HUNDRED_MILLION',
+        presentation: {
+          displaySchemaVersion: 1,
+          template: 'branch-overview-v1',
+          display: {
+            components: [],
+            comparisons: {
+              'overview-deposit': { enabled: false },
+              'overview-settlementDeposit': { enabled: false }
+            }
+          }
+        },
+        model: {
+          dataDate: '2026-10-15',
+          kpis: [
+            { key: 'deposit', value: 1000, unit: 'HUNDRED_MILLION', dataDate: '2026-10-15' },
+            { key: 'settlementDeposit', value: 600, unit: 'HUNDRED_MILLION', dataDate: '2026-10-15' }
+          ],
+          periodComparisonConfig: {
+            'overview-deposit': { day: { mode: 'METRIC', metricCode: 'M_AMOUNT', outputColumn: '增量', unit: 'HUNDRED_MILLION' } },
+            'overview-settlementDeposit': { day: { mode: 'METRIC', metricCode: 'M_AMOUNT', outputColumn: '增量', unit: 'HUNDRED_MILLION' } }
+          },
+          periodComparisonSources: {
+            'overview-deposit': [{ data_date: '2026-10-15', 增量: 10 }],
+            'overview-settlementDeposit': [{ data_date: '2026-10-15', 增量: 20 }]
+          }
+        }
+      },
+      global: { stubs }
+    });
+    mounted.push(wrapper);
+
+    const cards = wrapper.vm.overviewSummary.cards;
+    const deposit = cards.find(item => item.key === 'deposit');
+    const settlement = cards.find(item => item.key === 'settlementDeposit');
+    expect(deposit.metric.comparisons).toBeNull();
+    expect(settlement.metric.comparisons).toBeNull();
+    expect(deposit.comparisons.find(item => item.key === 'day').text).toContain('暂无数据');
+    expect(settlement.comparisons.find(item => item.key === 'day').text).toContain('暂无数据');
+  });
+
   it('将配置组件重排为重点卡/次级卡、左中右三栏，并让地图先于趋势且明细下置', () => {
     const components = [
       ...Array.from({ length: 4 }, (_, index) => ({

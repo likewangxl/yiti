@@ -12,11 +12,18 @@ const api = vi.hoisted(() => ({
   discardScreenCanvas: vi.fn(),
   queryScreenData: vi.fn(),
   listOrgProfiles: vi.fn(),
-  listOrgGroups: vi.fn()
+  listOrgGroups: vi.fn(),
+  listScreenMetricCatalog: vi.fn(async () => []),
+  saveScreenDatasource: vi.fn(),
+  tryRunScreenDatasource: vi.fn()
 }));
 vi.mock('@/api/screen', () => api);
 
 const router = vi.hoisted(() => ({ push: vi.fn(), back: vi.fn() }));
+const { permissionStore } = vi.hoisted(() => ({ permissionStore: {
+  loaded: true, canAccess: vi.fn(() => true), load: vi.fn()
+} }));
+vi.mock('@/stores/permission', () => ({ usePermissionStore: () => permissionStore }));
 vi.mock('vue-router', () => ({
   useRoute: () => ({ query: {} }),
   useRouter: () => router
@@ -61,6 +68,9 @@ const { datasourcePickerStub } = vi.hoisted(() => ({
   }
 }));
 vi.mock('../PanoramaDatasourcePicker.vue', () => ({ default: datasourcePickerStub }));
+vi.mock('../MetricBindingComposer.vue', () => ({
+  default: { name: 'MetricBindingComposer', template: '<section data-testid="metric-catalog-binder" />' }
+}));
 
 import PanoramaBindings from '../PanoramaBindings.vue';
 import PanoramaRuntime from '../PanoramaRuntime.vue';
@@ -132,6 +142,9 @@ describe('PanoramaBindings', () => {
   beforeEach(() => {
     router.push.mockReset();
     router.back.mockReset();
+    permissionStore.loaded = true;
+    permissionStore.canAccess.mockReturnValue(true);
+    permissionStore.load.mockReset();
     api.queryScreenData.mockReset();
     api.listOrgProfiles.mockReset();
     api.listOrgGroups.mockReset();
@@ -576,7 +589,7 @@ describe('PanoramaBindings', () => {
     wrapper.unmount();
   });
 
-  it('保存冲突保留编辑态且不暴露发布操作', async () => {
+  it('保存冲突保留编辑态且不会自动发布', async () => {
     api.listScreens.mockResolvedValue([screen]);
     api.getScreenCanvas.mockResolvedValue({ ...canvas, canvasDraftJson: JSON.stringify({ components: [] }) });
     api.listScreenDatasources.mockResolvedValue([datasource]);
@@ -595,8 +608,7 @@ describe('PanoramaBindings', () => {
     }));
     await vi.waitFor(() => expect(wrapper.find('[data-testid="binding-conflict"]').exists()).toBe(true));
     expect(wrapper.find('[data-testid="binding-conflict"]').text()).toContain('版本冲突');
-    expect(wrapper.find('[data-testid="binding-publish"]').exists()).toBe(false);
-    expect(wrapper.find('[data-testid="publish-reason"]').exists()).toBe(false);
+    expect(api.publishScreenCanvas).not.toHaveBeenCalled();
   });
 
   it('读取到列角色不匹配的旧绑定时，保存会拒绝而不把日期当作指标', async () => {

@@ -10,12 +10,57 @@
         <el-button v-if="hasLocalChanges" data-testid="binding-cancel" :disabled="writing || loading" @click="cancelLocalChanges">取消修改</el-button>
         <el-button data-testid="binding-preview" title="请先保存草稿再预览" :disabled="!screenReady || writing || hasLocalChanges" @click="preview">预览</el-button>
         <el-button data-testid="binding-save" type="primary" :loading="saving" :disabled="writing || !screenReady" @click="saveDraft">保存草稿</el-button>
+        <el-button data-testid="binding-publish" :loading="publishing" :disabled="!canStartPublish"
+                   :title="publishDisabledHint || '发布当前已保存草稿'" @click="openPublishDialog">发布</el-button>
       </div>
     </header>
 
+    <p v-if="!publishPermissionGranted" class="panorama-bindings__publish-permission" data-testid="publish-permission-hint" role="note">
+      当前账号没有发布大屏的权限，请联系管理员开通权限。
+    </p>
     <p v-if="error" class="panorama-bindings__error" role="alert">{{ error }}</p>
     <p v-if="conflict" class="panorama-bindings__conflict" data-testid="binding-conflict" role="alert">{{ conflict }}</p>
+    <p v-if="publishError" class="panorama-bindings__error" data-testid="binding-publish-error" role="alert">{{ publishError }}</p>
+    <div v-if="publishedResult" class="panorama-bindings__publish-success" data-testid="binding-published" role="status">
+      <span>已发布到正式大屏“{{ publishedResult.screenName }}”，正式查看者现在读取新版本。</span>
+      <el-button v-if="publishedResult.screenCode" data-testid="view-published-screen" @click="viewPublishedScreen">查看正式大屏</el-button>
+    </div>
+    <div v-if="publishRefreshWarning" class="panorama-bindings__publish-refresh-warning" data-testid="publish-refresh-warning" role="note">
+      <span>{{ publishRefreshWarning }}</span>
+      <el-button data-testid="publish-refresh" :loading="loading" :disabled="loading || publishing" @click="loadCanvas(activeScreenId, { preservePublishState: true })">重新读取配置</el-button>
+    </div>
     <p v-if="loading" class="panorama-bindings__loading" role="status">正在读取服务端屏配置…</p>
+
+    <el-dialog v-model="publishDialogOpen" class="panorama-bindings__publish-dialog"
+               title="确认发布大屏" data-testid="publish-confirmation-dialog"
+               :close-on-click-modal="false" :close-on-press-escape="!publishing"
+               :show-close="!publishing" :before-close="beforePublishDialogClose"
+               @close="handlePublishDialogClose">
+      <template #header>
+        <h2 id="publish-confirmation-title">确认发布大屏</h2>
+      </template>
+        <p>将“{{ activeScreenName }}”当前已保存的草稿正式发布。发布成功后正式生效，这张大屏的运行内容立即更新，具备查看权限的用户会看到新版本。</p>
+        <p class="panorama-bindings__publish-version">屏幕编码：{{ activeScreen?.screenCode || activeScreen?.screen_code || '未提供' }}</p>
+        <p class="panorama-bindings__publish-version">本次发布使用当前保存版本：{{ canvas?.canvasVersion }}</p>
+        <label class="panorama-bindings__field-label" for="publish-reason">发布原因（必填）</label>
+        <textarea id="publish-reason" v-model="publishReason" data-testid="publish-reason" rows="3"
+                  placeholder="说明本次发布原因" :disabled="publishing"></textarea>
+        <p v-if="!publishReason.trim()" class="panorama-bindings__hint" data-testid="publish-reason-hint" role="note">请填写非空的发布原因。</p>
+        <label class="panorama-bindings__publish-confirmation" data-testid="publish-confirmation">
+          <input v-model="publishConfirmed" type="checkbox" :disabled="publishing" />
+          我确认将“{{ activeScreenName }}”正式发布，正式查看者将看到当前已保存版本。
+        </label>
+        <p v-if="publishDialogError" class="panorama-bindings__error" role="alert">{{ publishDialogError }}</p>
+      <template #footer>
+        <div class="panorama-bindings__publish-dialog-actions">
+          <el-button data-testid="publish-cancel" :disabled="publishing" @click="cancelPublishDialog">取消</el-button>
+          <el-button data-testid="publish-confirm" type="primary" :loading="publishing"
+                     :disabled="publishing || !publishConfirmed || !publishReason.trim()" @click="confirmPublish">
+            {{ publishing ? '发布中…' : '确认发布' }}
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
 
     <section class="card-section panorama-bindings__screen-bar">
       <label for="panorama-screen-select">经营大屏</label>
@@ -94,18 +139,41 @@
             <p v-if="selectedCatalogEntry?.kind === 'INSTITUTION_MAP'" class="panorama-bindings__hint">数据来自当前授权机构目录/经营画像，仅区域标题可改。</p>
             <p v-else-if="selectedCatalogEntry?.kind === 'SYSTEM_METRIC'" class="panorama-bindings__hint">该指标由运行态系统生成，没有独立数据来源、字段或周期配置。</p>
 
-            <section v-if="selectedBusinessField" data-testid="business-metric-section">
-              <label for="business-semantic" class="panorama-bindings__field-label">配置项</label>
-              <select id="business-semantic" data-testid="business-semantic" :value="selectedBusinessField.semantic"
-                :disabled="writing || loading" @change="businessSemantic = $event.target.value">
-                <option v-for="fieldSpec in businessFieldSpecs" :key="fieldSpec.semantic" :value="fieldSpec.semantic">{{ fieldSpec.label }}</option>
+            <section v-if="comparisonConfigurable" class="panorama-bindings__comparison-mode" data-testid="comparison-mode-entry">
+              <label class="panorama-bindings__field-label" for="comparison-mode">比较方式</label>
+              <select id="comparison-mode" class="panorama-bindings__comparison-select" data-testid="comparison-mode" :value="comparisonMode" :disabled="writing || loading" @change="setComparisonMode($event.target.value)">
+                <option value="inherit">沿用现有</option>
+                <option value="catalog">指标目录比较</option>
+                <option value="custom">历史来源比较</option>
+                <option value="disabled">关闭比较</option>
               </select>
-              <BusinessMetricPicker :entries="businessEntriesFor(selectedBusinessField)"
-                :relevance-context="businessRelevanceContext"
-                :model-value="{ datasourceId: selectedBinding.dsId, field: selectedBinding.fields[selectedBusinessField.semantic] }"
-                :label="`选择${selectedBusinessField.label}指标`" :disabled="writing || loading"
-                @select="entry => applyBusinessMetric(selectedBusinessField, entry)" />
+              <p class="panorama-bindings__hint">目录比较按当前指标单位计算；历史来源字段只在选择历史来源比较后展开。</p>
             </section>
+
+            <MetricBindingComposer v-if="!selectedCatalogReadonly || periodComparisonConfigurable"
+              :key="`${activeScreenId}-${selectedCatalogEntry?.key || selectedSlot}`"
+              :slot-key="selectedSlot"
+              :slot-label="selectedSpec.label"
+              :template-name="selectedTemplate"
+              :field-specs="selectedFieldSpecs"
+              :composition-mode="compositionMode"
+              :screen="screenScope"
+              :datasources="datasources"
+              :bound-binding="hasNewDisplayPresentation ? null : selectedBinding"
+              :bound-datasource="hasNewDisplayPresentation ? null : selectedDatasource"
+              :catalog="hasNewDisplayPresentation ? metricCatalog : null"
+              :disabled="writing || loading"
+              :show-period-comparisons="periodComparisonConfigurable && comparisonMode === 'catalog'"
+              :comparisons-only="selectedCatalogReadonly && periodComparisonConfigurable"
+              :period-comparisons="selectedPeriodComparisons"
+              :initial-fields="hasNewDisplayPresentation ? selectedSchemaInitialBinding.fields : {}"
+              :initial-units="hasNewDisplayPresentation ? selectedSchemaInitialBinding.units : {}"
+              :existing-field-notes="selectedExistingFieldNotes"
+              :initial-aggregation="hasNewDisplayPresentation ? selectedInitialAggregation : null"
+              :initial-filters="hasNewDisplayPresentation ? selectedInitialFilters : []"
+              :initial-period="selectedBinding.period"
+              :initial-datasource-id="selectedBinding.dsId"
+              @apply="applyMetricBindingPlan" />
             <details v-if="!selectedCatalogReadonly || comparisonConfigurable" class="panorama-bindings__advanced" data-testid="advanced-binding-fields">
               <summary>高级字段配置（技术维护）</summary>
             <template v-if="hasNewDisplayPresentation && selectedDisplayFieldMappings.length">
@@ -137,13 +205,7 @@
 
             <details v-if="comparisonConfigurable" class="panorama-bindings__comparison" data-testid="comparison-panel">
               <summary>比较数据（昨日/上月末/上年末）</summary>
-              <p class="panorama-bindings__hint">基期按数据日期固定为昨日、上月末、上年末；金额按差额计算，完成率按百分点计算。</p>
-              <label class="panorama-bindings__field-label" for="comparison-mode">比较配置</label>
-              <select id="comparison-mode" class="panorama-bindings__comparison-select" data-testid="comparison-mode" :value="comparisonMode" :disabled="writing || loading" @change="setComparisonMode($event.target.value)">
-                <option value="inherit">沿用原配置</option>
-                <option value="custom">自定义比较来源</option>
-                <option value="disabled">关闭比较</option>
-              </select>
+               <p class="panorama-bindings__hint">基期按数据日期固定为昨日、上月末、上年末；金额按差额计算，完成率按百分点计算。</p>
               <template v-if="comparisonMode === 'custom'">
                 <label class="panorama-bindings__field-label" for="comparison-history-block">历史区块</label>
                 <select id="comparison-history-block" class="panorama-bindings__comparison-select" data-testid="comparison-history-block" :value="comparisonConfig?.historyBlockId || ''" :disabled="writing || loading" @change="setComparisonField('historyBlockId', Number($event.target.value) || null)">
@@ -254,11 +316,15 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { usePermissionStore } from '@/stores/permission';
 import {
   getScreenCanvas,
   listScreenDatasources,
+  listScreenMetricCatalog,
   listScreens,
-  saveScreenCanvas
+  publishScreenCanvas,
+  saveScreenCanvas,
+  saveScreenDatasource
 } from '@/api/screen';
 import { parseDatasourceConfig } from '../designer/widgets/chart-widget/dsFilter';
 import {
@@ -288,9 +354,14 @@ import {
 } from './defaultBindings';
 import PanoramaDatasourcePicker from './PanoramaDatasourcePicker.vue';
 import PanoramaDataVerification from './PanoramaDataVerification.vue';
-import BusinessMetricPicker from './BusinessMetricPicker.vue';
-import { buildBusinessMetricCatalog } from './businessMetricCatalog';
-import { qualifyBusinessMetricEntries } from './businessMetricEligibility';
+import MetricBindingComposer from './MetricBindingComposer.vue';
+import { mergePeriodMetrics } from './screenMetricBinding';
+import {
+  buildDatasourceFieldOptions,
+  buildSchemaFieldSpecs,
+  buildSchemaInitialBinding,
+  mergeCompatibleDatasourceRequest
+} from './visibleMetricBindings';
 import { buildBusinessSourceCandidates } from '../presentation/sources/businessSourceCandidates';
 import { buildRuntimeComponentCatalog, resolveConfiguredMetricLabel } from '../presentation/editor/runtimeComponentCatalog';
 import { getEffectiveBusinessGrowthSeries } from '../presentation/model/businessGrowthModel';
@@ -307,6 +378,8 @@ const props = defineProps({ screenId: { type: [Number, String], default: '' } })
 const emit = defineEmits(['saved', 'published', 'discarded', 'preview', 'error']);
 const route = useRoute();
 const router = useRouter();
+const permissionStore = usePermissionStore();
+const PUBLISH_RESOURCE = '/api/screen/admin/canvas/publish';
 
 const screens = ref([]);
 const activeScreenId = ref('');
@@ -315,14 +388,27 @@ const canvas = ref(null);
 const canvasStyle = ref({});
 const draftComponents = ref([]);
 const datasources = ref([]);
+// null means the directory has not been loaded or failed; [] is reserved for
+// a confirmed empty response so a failed request is never shown as empty.
+const metricCatalog = ref(null);
 const selectedSlot = ref(SLOT_ORDER[0]);
 const selectedComponentId = ref('');
 const selectedCatalogKey = ref('');
+const comparisonModeOverrides = reactive({});
 const bindingState = reactive({});
 const loading = ref(false);
 const saving = ref(false);
+const publishing = ref(false);
 const error = ref('');
 const conflict = ref('');
+const publishDialogOpen = ref(false);
+const publishReason = ref('');
+const publishConfirmed = ref(false);
+const publishDialogError = ref('');
+const publishError = ref('');
+const publishRefreshWarning = ref('');
+const publishedResult = ref(null);
+const publishContext = ref(null);
 const conversionAccepted = ref(false);
 const screenReady = ref(false);
 const compositionMode = ref('rows');
@@ -336,6 +422,28 @@ let disposed = false;
 const displaySession = ref(createPresentationEditorSession({}, { type: 'CODE', template: 'branch-overview-v1' }));
 
 const selectedTemplate = ref('branch-overview-v1');
+const activeScreenName = computed(() => activeScreen.value?.screenName || activeScreen.value?.screen_name
+  || activeScreen.value?.screenCode || activeScreen.value?.screen_code || `屏幕 #${activeScreenId.value}`);
+const publishPermissionGranted = computed(() => permissionStore.loaded === true
+  && typeof permissionStore.canAccess === 'function'
+  && permissionStore.canAccess(PUBLISH_RESOURCE));
+const canvasVersionValid = computed(() => Number.isSafeInteger(canvas.value?.canvasVersion)
+  && canvas.value.canvasVersion >= 0);
+const writing = computed(() => saving.value || publishing.value || publishDialogOpen.value);
+const canStartPublish = computed(() => screenReady.value && !loading.value && !saving.value && !publishing.value
+  && !publishDialogOpen.value && !hasLocalChanges.value && canvasVersionValid.value && publishPermissionGranted.value);
+const canConfirmPublish = computed(() => screenReady.value && !loading.value && !saving.value && !publishing.value
+  && !hasLocalChanges.value && canvasVersionValid.value && publishPermissionGranted.value);
+const publishDisabledHint = computed(() => {
+  if (!publishPermissionGranted.value) return '当前账号没有发布大屏的权限';
+  if (loading.value) return '正在读取大屏配置';
+  if (!screenReady.value) return '大屏配置尚未读取完成';
+  if (saving.value || publishing.value) return '当前有写操作正在进行';
+  if (publishDialogOpen.value) return '请先完成或取消发布确认';
+  if (hasLocalChanges.value) return '请先保存或取消未保存修改';
+  if (!canvasVersionValid.value) return '当前画布版本无效，请重新读取配置';
+  return '';
+});
 const isRetailTemplate = computed(() => selectedTemplate.value === 'retail-overview-v1');
 const isCorporateTemplate = computed(() => selectedTemplate.value === CORPORATE_TEMPLATE);
 const isBranchTemplate = computed(() => !isRetailTemplate.value && !isCorporateTemplate.value);
@@ -354,14 +462,18 @@ const slotOrder = computed(() => {
   return hasOptionalBinding ? [...base, ...BRANCH_OPTIONAL_SLOT_ORDER] : base;
 });
 function changeActiveScreen() {
+  if (writing.value) {
+    activeScreenId.value = String(activeScreen.value?.id || '');
+    return false;
+  }
   if (hasLocalChanges.value) {
     conflict.value = '存在未保存的组件配置，请先保存草稿或取消修改后再切换大屏。';
     activeScreenId.value = String(activeScreen.value?.id || '');
     return false;
   }
+  clearPublishState();
   return loadCanvas(activeScreenId.value);
 }
-const writing = computed(() => saving.value);
 const hasLocalChanges = computed(() => localDirty.value || Boolean(displaySession.value?.dirty));
 const templateSpec = slot => (isCorporateTemplate.value
   ? CORPORATE_BINDING_SLOTS[slot]
@@ -373,12 +485,53 @@ const selectedBinding = computed(() => {
 });
 const selectedFieldSpecs = computed(() => {
   if (!selectedSpec.value) return [];
+  if (hasNewDisplayPresentation.value && selectedCatalogEntry.value?.kind === 'DERIVED_TOTAL') {
+    return [{ semantic: 'value', label: '当前金额', kind: 'metric', required: true,
+      unitKinds: ['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION'] }];
+  }
+  if (hasNewDisplayPresentation.value && selectedCatalogEntry.value
+      && !['DERIVED_TOTAL', 'SYSTEM_METRIC', 'INSTITUTION_MAP'].includes(selectedCatalogEntry.value.kind)) {
+    return buildSchemaFieldSpecs({ entry: selectedCatalogEntry.value, component: selectedDisplayComponent.value });
+  }
   if (selectedSlot.value !== 'composition') return selectedSpec.value.fields || [];
   const semantics = compositionMode.value === 'columns'
     ? ['corporate', 'retail', 'total', 'corporateLoan', 'retailLoan', 'totalLoan', 'intermediaryIncome', 'operatingRevenue'] : ['name', 'value'];
   return (selectedSpec.value.fields || []).filter(fieldSpec => semantics.includes(fieldSpec.semantic));
 });
 const selectedDatasource = computed(() => datasources.value.find(item => String(item.id) === String(selectedBinding.value.dsId)) || null);
+const selectedSchemaInitialBinding = computed(() => {
+  if (!hasNewDisplayPresentation.value) return { fields: {}, units: {} };
+  if (selectedCatalogEntry.value?.kind === 'DERIVED_TOTAL') {
+    return {
+      fields: { value: selectedBinding.value.fields?.value || '' },
+      units: { value: selectedBinding.value.units?.value || '' }
+    };
+  }
+  if (!selectedDisplayComponent.value) return { fields: {}, units: {} };
+  return buildSchemaInitialBinding({
+    entry: selectedCatalogEntry.value,
+    component: selectedDisplayComponent.value,
+    binding: selectedBinding.value
+  });
+});
+const selectedExistingFieldNotes = computed(() => {
+  if (!hasNewDisplayPresentation.value || !selectedDatasource.value) return [];
+  const sourceLabel = selectedDatasource.value.dsName || selectedDatasource.value.ds_name || `数据来源 #${selectedDatasource.value.id}`;
+  const fields = selectedSchemaInitialBinding.value.fields || {};
+  const notes = [];
+  for (const [semantic, field] of Object.entries(fields)) {
+    if (!field || semantic === 'date' || (Array.isArray(metricCatalog.value)
+      && metricCatalog.value.some(item => String(item?.outputColumn || item?.metricName || '') === String(field)))) continue;
+    const unit = selectedSchemaInitialBinding.value.units?.[semantic] || '单位待确认';
+    notes.push(`已有来源：${sourceLabel} → ${field}（${unit}），目录未唯一匹配，保留原字段。`);
+  }
+  return notes;
+});
+const selectedInitialAggregation = computed(() => {
+  const config = parseDatasourceConfig(selectedDatasource.value?.configJson);
+  return config?.aggregation && typeof config.aggregation === 'object' ? config.aggregation : null;
+});
+const selectedInitialFilters = computed(() => selectedInitialAggregation.value?.filters || []);
 const runtimeCatalog = computed(() => buildRuntimeComponentCatalog(hasNewDisplayPresentation.value
   ? { ...displaySession.value?.presentation, metricLabels: canvasStyle.value?.metricLabels }
   : canvasStyle.value));
@@ -386,6 +539,16 @@ const catalogEntries = computed(() => runtimeCatalog.value.entries || []);
 const selectedCatalogEntry = computed(() => catalogEntries.value.find(item => item.key === selectedCatalogKey.value)
   || catalogEntries.value[0] || null);
 const selectedCatalogReadonly = computed(() => ['SYSTEM_METRIC', 'INSTITUTION_MAP'].includes(selectedCatalogEntry.value?.kind));
+const periodComparisonConfigurable = computed(() => {
+  const entry = selectedCatalogEntry.value;
+  if (!entry) return false;
+  if (entry.kind === 'DERIVED_TOTAL' || entry.key === 'overview-settlementDeposit') return true;
+  return ['METRIC_CARD', 'COMPLETION'].includes(entry.component?.componentType);
+});
+const selectedPeriodComparisons = computed(() => {
+  const key = selectedCatalogEntry.value?.key || selectedSlot.value;
+  return canvasStyle.value?.periodComparisons?.[key] || null;
+});
 const comparisonConfigurable = computed(() => {
   const entry = selectedCatalogEntry.value;
   const systemSettlement = entry?.key === 'overview-settlementDeposit';
@@ -397,7 +560,15 @@ const comparisonAllowsMultiple = computed(() => comparisonKey.value.startsWith('
 const comparisonConfig = computed(() => comparisonKey.value
   ? displaySession.value?.presentation?.display?.comparisons?.[comparisonKey.value] || null : null);
 const comparisonMode = computed(() => {
-  if (!comparisonConfig.value) return 'inherit';
+  if (comparisonModeOverrides[comparisonKey.value]) return comparisonModeOverrides[comparisonKey.value];
+  if (!comparisonConfig.value) {
+    const catalogConfig = selectedPeriodComparisons.value;
+    if (catalogConfig?.__mode === 'inherit') return 'inherit';
+    if (catalogConfig && Object.prototype.hasOwnProperty.call(canvasStyle.value?.periodComparisons || {}, comparisonKey.value)) return 'catalog';
+    if (catalogConfig && Object.values(catalogConfig).some(item => item?.mode === 'METRIC' || item?.mode === 'OFFSET')) return 'catalog';
+    if (['DERIVED_TOTAL', 'SYSTEM_METRIC'].includes(selectedCatalogEntry.value?.kind)) return 'catalog';
+    return 'inherit';
+  }
   return comparisonConfig.value.enabled === false ? 'disabled' : 'custom';
 });
 const historyBlockOptions = computed(() => {
@@ -506,6 +677,7 @@ const selectedDisplayFieldMappings = computed(() => {
     return tabItems.flatMap(({ item, index }) => fields
       .filter(field => Object.prototype.hasOwnProperty.call(item || {}, field))
       .map(field => ({ key: `tab-${item.tabKey || index}-${field}`, kind: 'tabs', index, field,
+        tabKey: String(item.tabKey || ''),
         label: `${item.label || item.tabKey || '构成'}·${field.replace('Field', '')}`,
         value: String(item[field] || ''), testId: `component-tab-field-${item.tabKey || index}-${field}` })));
   }
@@ -557,7 +729,9 @@ function componentFieldOptions(mapping) {
   const expectedRole = mapping.kind === 'columns' && dimensionColumns.has(columnKey) ? 'DIM' : 'METRIC';
   const currentUnit = String(componentMappingItem(mapping)?.unit || selectedDisplayComponent.value?.dataRefs?.[0]?.unit || '');
   const currentKind = unitKindOf(currentUnit);
-  return getDatasourceFieldOptions(selectedDatasource.value)
+  const declared = [...getDatasourceFieldOptions(selectedDatasource.value), ...buildDatasourceFieldOptions(selectedDatasource.value, metricCatalog.value)]
+    .filter((option, index, list) => list.findIndex(item => item.col === option.col) === index);
+  return declared
     .filter(option => String(option.role || '').toUpperCase() === expectedRole)
     .filter(option => !currentKind || !option.unit || unitKindOf(option.unit) === currentKind);
 }
@@ -725,15 +899,52 @@ function updateComparisonPresentation(next) {
   markLocalDirty();
 }
 
+function emptyPeriodComparisonConfig() {
+  return {
+    day: { mode: 'UNSET', metricCode: '', outputColumn: '', unit: '', tableName: '' },
+    month: { mode: 'UNSET', metricCode: '', outputColumn: '', unit: '', tableName: '' },
+    year: { mode: 'UNSET', metricCode: '', outputColumn: '', unit: '', tableName: '' }
+  };
+}
+
 function setComparisonMode(mode) {
   if (!comparisonConfigurable.value) return;
+  const key = comparisonKey.value;
+  comparisonModeOverrides[key] = mode;
   if (mode === 'inherit') {
     updateComparisonPresentation(null);
+    const periodComparisons = { ...(canvasStyle.value.periodComparisons || {}) };
+    periodComparisons[key] = { ...emptyPeriodComparisonConfig(), __mode: 'inherit' };
+    canvasStyle.value = {
+      ...canvasStyle.value,
+      periodComparisons
+    };
+    markLocalDirty();
+    return;
+  }
+  if (mode === 'catalog') {
+    // 目录配置存放在 canvasStyle.periodComparisons；移除旧 display override，
+    // 否则历史 enabled=false 会继续压住目录结果。
+    updateComparisonPresentation(null);
+    const periodComparisons = { ...(canvasStyle.value.periodComparisons || {}) };
+    const current = periodComparisons[key] || emptyPeriodComparisonConfig();
+    delete current.__mode;
+    periodComparisons[key] = current;
+    canvasStyle.value = { ...canvasStyle.value, periodComparisons };
+    markLocalDirty();
     return;
   }
   if (mode === 'disabled') {
+    const periodComparisons = { ...(canvasStyle.value.periodComparisons || {}) };
+    delete periodComparisons[key];
+    canvasStyle.value = { ...canvasStyle.value, periodComparisons };
     updateComparisonPresentation({ enabled: false });
     return;
+  }
+  if (mode === 'custom') {
+    const periodComparisons = { ...(canvasStyle.value.periodComparisons || {}) };
+    delete periodComparisons[key];
+    canvasStyle.value = { ...canvasStyle.value, periodComparisons };
   }
   const current = comparisonConfig.value && comparisonConfig.value.enabled !== false ? comparisonConfig.value : {};
   updateComparisonPresentation({
@@ -828,14 +1039,20 @@ function setComponentField(mapping, value) {
       let current = Array.isArray(selectedDisplayComponent.value.content?.[mapping.kind])
         ? selectedDisplayComponent.value.content[mapping.kind].map(item => ({ ...item })) : [];
       let targetIndex = mapping.index;
+      const desiredTabKey = mapping.kind === 'tabs'
+        ? String(selectedCatalogEntry.value?.tabKey || mapping.tabKey || '') : '';
+      if (mapping.kind === 'tabs' && desiredTabKey) {
+        const exactIndex = current.findIndex(item => String(item?.tabKey || '') === desiredTabKey);
+        if (exactIndex >= 0) targetIndex = exactIndex;
+      }
       if (mapping.kind === 'tabs' && selectedCatalogEntry.value?.materializedTabs?.length
           && selectedCatalogEntry.value.sourceTabKey
-          && !current.some(item => item?.tabKey === selectedCatalogEntry.value.tabKey)) {
+          && !current.some(item => item?.tabKey === desiredTabKey)) {
         const sourceIndex = current.findIndex(item => item?.tabKey === selectedCatalogEntry.value.sourceTabKey);
         if (sourceIndex >= 0) {
           current = current.flatMap(item => item?.tabKey === selectedCatalogEntry.value.sourceTabKey
             ? selectedCatalogEntry.value.materializedTabs.map(tab => ({ ...tab })) : [item]);
-          targetIndex = current.findIndex(item => item?.tabKey === selectedCatalogEntry.value.tabKey);
+          targetIndex = current.findIndex(item => item?.tabKey === desiredTabKey);
         }
       }
       const item = { ...(current[targetIndex] || {}) };
@@ -903,6 +1120,14 @@ function fieldLabel(slot, semantic) {
 
 const selectedGuidance = computed(() => {
   if (!selectedSpec.value) return '请选择展示内容';
+  if (hasNewDisplayPresentation.value) {
+    const visibleLabels = selectedFieldSpecs.value
+      .filter(field => field?.kind !== 'dimension')
+      .map(field => field?.label)
+      .filter(Boolean);
+    if (visibleLabels.length) return `当前组件仅配置${visibleLabels.join('、')}；已有绑定会保留。`;
+    return '当前组件没有可配置的展示字段。';
+  }
   if (selectedSlot.value === 'composition') {
     return compositionMode.value === 'columns'
       ? '对公金额/零售金额均需绑定；总量/分母可选，若配置必须是同类且有明确单位的指标，来源必须返回一行双列数据。'
@@ -948,72 +1173,153 @@ const availableDatasources = computed(() => buildBusinessSourceCandidates(scoped
 const selectableDatasourceCount = computed(() => availableDatasources.value
   .filter(source => !source.__compositionColumnsUnsupported && !source.disabled).length);
 
-const businessFieldSpecs = computed(() => selectedCatalogReadonly.value ? []
-  : selectedFieldSpecs.value.filter(field => field.kind !== 'dimension' && field.unitKinds?.length));
-const businessSemantic = ref('value');
-const selectedBusinessField = computed(() => businessFieldSpecs.value.find(field => field.semantic === businessSemantic.value)
-  || businessFieldSpecs.value[0] || null);
-/** 名称关键词仅用于推荐顺序，不能替代来源资格、用途、单位或机构范围校验。 */
-const businessRelevanceContext = computed(() => {
-  const label = `${selectedSpec.value?.label || ''} ${selectedBusinessField.value?.label || ''}`;
-  const terms = ['存款', '贷款', '客户', '收入', '营收', '不良', 'AUM', '目标', '完成', '净增', '日均', '变化', '营销', '跟进'];
-  return {
-    semantic: [selectedSlot.value, selectedBusinessField.value?.semantic].filter(value => value && value !== 'value'),
-    keywords: [selectedSpec.value?.label, ...terms.filter(term => label.toUpperCase().includes(term.toUpperCase()))].filter(Boolean),
-    preferredSourceIds: [...new Set([selectedBinding.value.dsId, ...savedBindingsForCatalog.value.map(binding => binding.dsId)].filter(Boolean))]
+function rememberPeriodComparisons(config) {
+  if (!config) return;
+  const key = selectedCatalogEntry.value?.key || selectedSlot.value;
+  if (!key) return;
+  const storedConfig = { ...config };
+  delete storedConfig.__mode;
+  canvasStyle.value = {
+    ...canvasStyle.value,
+    periodComparisons: { ...(canvasStyle.value.periodComparisons || {}), [key]: storedConfig }
   };
-});
-
-/** 单位证据只来自服务端已保存绑定，编辑中的手工单位不用于认证目录。 */
-const savedBindingsForCatalog = computed(() => {
-  const draft = parse(canvas.value?.canvasDraftJson, {});
-  const bindings = [];
-  function visit(items) {
-    for (const item of Array.isArray(items) ? items : []) {
-      const bind = parse(item?.bindJson, null);
-      if (bind?.dsId && bind.fields && bind.units) bindings.push(bind);
-      visit(item?.children);
-    }
-  }
-  if (Array.isArray(canvas.value?.blocks) && canvas.value.blocks.length) {
-    for (const block of canvas.value.blocks) {
-      const bind = parse(block?.bindJson, null);
-      if (bind?.dsId && bind.fields && bind.units) bindings.push(bind);
-    }
-  } else visit(draft.components);
-  return bindings;
-});
-
-function businessEntriesFor(fieldSpec) {
-  const entries = buildBusinessMetricCatalog(scopedDatasources.value, {
-    screen: screenScope.value,
-    slot: selectedSlot.value,
-    period: selectedBinding.value.period,
-    expectedShape: selectedSpec.value?.innerType === 'LINE_TREND' ? 'TIMESERIES' : 'SINGLE',
-    savedBindings: savedBindingsForCatalog.value
-  });
-  return qualifyBusinessMetricEntries(entries, {
-    fieldSpec, innerType: selectedSpec.value?.innerType, sources: scopedDatasources.value,
-    period: selectedBinding.value.period, savedBindings: savedBindingsForCatalog.value
-  });
 }
 
-function applyBusinessMetric(fieldSpec, selection) {
-  if (writing.value || loading.value || !fieldSpec) return;
-  const allowed = businessEntriesFor(fieldSpec).find(entry => !entry.disabled
-    && String(entry.sourceId) === String(selection?.datasourceId) && entry.field === selection?.field);
-  if (!allowed) return;
-  if (String(selectedBinding.value.dsId) !== String(allowed.sourceId)) onDatasourceChange(String(allowed.sourceId));
-  setField(fieldSpec.semantic, allowed.field);
-  setUnit(fieldSpec.semantic, allowed.unit);
-  // 类型化卡片的独立展示字段和原始单位引用必须同步更新。
-  if (fieldSpec.semantic === 'value' && isSchemaMetricCard.value && selectedDisplayComponent.value) {
+async function attachPeriodMetrics(plan) {
+  const additions = Array.isArray(plan?.extraMetrics) ? plan.extraMetrics : [];
+  if (!additions.length) return '';
+  const preferred = ['deposit', 'loan', selectedSlot.value].filter(Boolean);
+  const candidates = [...new Set([...preferred, ...Object.keys(bindingState)])];
+  for (const slot of candidates) {
+    const binding = bindingState[slot];
+    const source = datasources.value.find(item => String(item.id) === String(binding?.dsId));
+    if (!source) continue;
+    const config = parseDatasourceConfig(source.configJson);
+    const merged = mergePeriodMetrics(config, additions, { forceDate: additions.some(item => item.mode === 'OFFSET') });
+    if (!merged.ok) continue;
+    const created = await saveScreenDatasource({
+      dsName: `${source.dsName || '指标绑定'}·期间比较`.slice(0, 100),
+      dsType: merged.config.aggregation?.groupBy === 'DATE' ? 'TIMESERIES' : (source.dsType || 'SINGLE'),
+      sourceKind: 'WIDE_TABLE',
+      bizLine: source.bizLine || screenScope.value.bizLine,
+      configJson: JSON.stringify(merged.config),
+      timeParamJson: source.timeParamJson || JSON.stringify(['LATEST', 'LAST_10D', 'LAST_1M', 'LAST_6M_EOM']),
+      status: 'ACTIVE',
+      reason: '把期间比较指标并入已绑定的结果表来源'
+    });
+    const dsId = typeof created === 'number' ? created : Number(created?.id ?? created);
+    if (!Number.isSafeInteger(dsId) || dsId <= 0) return '比较指标已记录，但没有写回来源编号';
+    binding.dsId = dsId;
+    const sourceList = await listScreenDatasources();
+    datasources.value = Array.isArray(sourceList) ? sourceList : [];
+    return '';
+  }
+  return '比较配置已记录。当前屏没有同一结果表的绑定来源，预览会保持待接入。';
+}
+
+function mergedDatasourceRequestForDisplay(plan, source) {
+  if (!source && selectedBinding.value?.dsId) {
+    throw new Error(`已绑定数据源 ${selectedBinding.value.dsId} 当前不可读，已停止创建替代来源`);
+  }
+  if (!source || !hasNewDisplayPresentation.value || !selectedDisplayComponent.value) return plan.datasourceRequest;
+  const currentKind = selectedCatalogEntry.value?.kind;
+  if (['DERIVED_TOTAL', 'SYSTEM_METRIC', 'INSTITUTION_MAP'].includes(currentKind)) return plan.datasourceRequest;
+  const request = plan.datasourceRequest || {
+    sourceKind: source.sourceKind || source.source_kind || 'WIDE_TABLE',
+    dsType: source.dsType || source.ds_type || 'SINGLE',
+    bizLine: source.bizLine || source.biz_line || screenScope.value.bizLine,
+    configJson: plan.previewRow?.configJson || source.configJson,
+    timeParamJson: source.timeParamJson || source.time_param_json,
+    status: 'ACTIVE',
+    reason: '为当前展示组件克隆并合并原宽表来源'
+  };
+  const merged = mergeCompatibleDatasourceRequest(source, request);
+  if (!merged.ok) throw new Error(merged.reason);
+  return {
+    ...request,
+    sourceKind: 'WIDE_TABLE',
+    dsType: merged.config?.aggregation?.groupBy === 'DATE' ? 'TIMESERIES' : (request.dsType || 'SINGLE'),
+    configJson: merged.configJson,
+    timeParamJson: source.timeParamJson || source.time_param_json || request.timeParamJson
+  };
+}
+
+async function applyMetricBindingPlan(plan) {
+  if (!plan?.ok || writing.value || loading.value) return;
+  saving.value = true;
+  error.value = '';
+  try {
+    if (plan.comparisonsOnly) {
+      rememberPeriodComparisons(plan.periodComparisons);
+      const warning = await attachPeriodMetrics(plan);
+      if (warning) autoNotice.value = warning;
+      markLocalDirty();
+      return;
+    }
+    const source = selectedDatasource.value;
+    const datasourceRequest = mergedDatasourceRequestForDisplay(plan, source);
+    let dsId = Number(plan.existingDatasourceId);
+    if (!Number.isSafeInteger(dsId) || dsId <= 0 || datasourceRequest) {
+      if (!datasourceRequest) throw new Error('没有可安全克隆的宽表来源，已停止保存');
+      const created = await saveScreenDatasource(datasourceRequest);
+      dsId = typeof created === 'number' ? created : Number(created?.id ?? created);
+      if (!Number.isSafeInteger(dsId) || dsId <= 0) throw new Error('数据源已提交，但没有返回有效编号');
+      const sourceList = await listScreenDatasources();
+      datasources.value = Array.isArray(sourceList) ? sourceList : [];
+    }
+    const binding = selectedBinding.value;
+    binding.dsId = dsId;
+    binding.period = plan.binding.period;
+    const schemaDisplayEdit = hasNewDisplayPresentation.value
+      && selectedDisplayComponent.value
+      && !['DERIVED_TOTAL', 'SYSTEM_METRIC', 'INSTITUTION_MAP'].includes(selectedCatalogEntry.value?.kind);
+    const rankingDisplayEdit = hasNewDisplayPresentation.value
+      && selectedCatalogEntry.value?.kind === 'INSTITUTION_RANKING';
+    if (rankingDisplayEdit) {
+      binding.fields = { ...(binding.fields || {}), ...(plan.binding.fields || {}) };
+      binding.units = { ...(binding.units || {}), ...(plan.binding.units || {}) };
+    } else if (!schemaDisplayEdit) {
+      binding.fields = { ...(plan.binding.fields || {}) };
+      binding.units = { ...(plan.binding.units || {}) };
+    }
+    manualSlots.add(selectedSlot.value);
+    autoReviewSlots.delete(selectedSlot.value);
+    syncDisplayFromPlan(plan);
+    rememberPeriodComparisons(plan.periodComparisons);
+    conflict.value = '';
+    markLocalDirty();
+  } catch (bindError) {
+    error.value = bindError?.message || '指标绑定失败';
+    emit('error', bindError);
+  } finally {
+    saving.value = false;
+  }
+}
+
+function syncDisplayFromPlan(plan) {
+  if (!hasNewDisplayPresentation.value || !selectedDisplayComponent.value) return;
+  const fields = plan.binding?.fields || {};
+  const units = plan.binding?.units || {};
+  if (fields.value && isSchemaMetricCard.value) {
     const component = selectedDisplayComponent.value;
     displaySession.value = updateModelComponent(displaySession.value, component.componentId, {
-      dataRefs: (component.dataRefs || []).map(ref => ({ ...ref, unit: allowed.unit }))
+      dataRefs: (component.dataRefs || []).map(ref => ({ ...ref, unit: units.value }))
     });
     const mapping = selectedDisplayFieldMappings.value.find(item => item.kind === 'mainField');
-    if (mapping) setComponentField(mapping, allowed.field);
+    if (mapping) setComponentField(mapping, fields.value);
+  }
+  if (selectedCatalogEntry.value?.kind === 'BUSINESS_GROWTH') {
+    for (const mapping of selectedDisplayFieldMappings.value.filter(item => item.kind === 'growthSeries')) {
+      if (fields[mapping.seriesKey]) setComponentField(mapping, fields[mapping.seriesKey]);
+    }
+  } else if (selectedCatalogEntry.value?.kind === 'COMPOSITION_TAB') {
+    for (const mapping of selectedDisplayFieldMappings.value.filter(item => item.kind === 'tabs')) {
+      const semantic = String(mapping.field || '').replace(/Field$/, '');
+      if (fields[semantic]) setComponentField(mapping, fields[semantic]);
+    }
+  } else if (selectedCatalogEntry.value?.kind === 'INSTITUTION_RANKING') {
+    // rankingMetrics.field is a runtime normalized key (deposit/increase/average);
+    // raw directory columns remain in the legacy binding fields above.
   }
 }
 
@@ -1024,7 +1330,14 @@ const declaredPeriods = computed(() => {
     // 缺省的历史配置保持原周期行为；这只保留兼容，不认证历史数据覆盖。
     return [...PERIOD_VALUES];
   }
-  const periods = parse(source.timeParamJson, []);
+  let periods;
+  try {
+    periods = typeof source.timeParamJson === 'string'
+      ? JSON.parse(source.timeParamJson)
+      : source.timeParamJson;
+  } catch {
+    periods = [];
+  }
   return Array.isArray(periods) ? periods.filter(period => PERIOD_VALUES.includes(period)) : [];
 });
 const periodUnsupported = computed(() => Boolean(selectedDatasource.value)
@@ -1131,11 +1444,28 @@ function requestedScreenId() {
   return screenIdValue(props.screenId) || screenIdValue(route?.query?.screenId);
 }
 
+function closePublishDialog() {
+  publishDialogOpen.value = false;
+  publishReason.value = '';
+  publishConfirmed.value = false;
+  publishDialogError.value = '';
+  publishContext.value = null;
+}
+
+function clearPublishState() {
+  closePublishDialog();
+  publishError.value = '';
+  publishRefreshWarning.value = '';
+  publishedResult.value = null;
+}
+
 function clearCanvasState() {
   canvas.value = null;
   canvasStyle.value = {};
   draftComponents.value = [];
   datasources.value = [];
+  metricCatalog.value = null;
+  for (const key of Object.keys(comparisonModeOverrides)) delete comparisonModeOverrides[key];
   for (const key of Object.keys(bindingState)) delete bindingState[key];
   selectedSlot.value = SLOT_ORDER[0];
   selectedComponentId.value = '';
@@ -1179,20 +1509,29 @@ async function loadScreens() {
   activeScreen.value = list.find(item => Number(item.id) === selected) || null;
 }
 
-async function loadCanvas(requestedId = activeScreenId.value) {
+async function loadCanvas(requestedId = activeScreenId.value, options = {}) {
+  const preservePublishState = options?.preservePublishState === true;
+  if (!preservePublishState && (publishing.value || publishDialogOpen.value)) return false;
   const id = screenIdValue(requestedId);
   if (!id) return false;
   const token = ++loadGeneration;
   activeScreen.value = screens.value.find(screen => Number(screen.id) === id) || activeScreen.value;
+  if (!preservePublishState) clearPublishState();
+  else publishRefreshWarning.value = '';
   clearCanvasState();
   activeScreenId.value = String(id);
   loading.value = true;
   error.value = '';
   conflict.value = '';
   try {
-    const [resp, sourceList] = await Promise.all([
+    const catalogPromise = typeof listScreenMetricCatalog === 'function'
+      ? listScreenMetricCatalog({}).then(rows => ({ ok: true, rows: Array.isArray(rows) ? rows : (rows?.records || []) }))
+        .catch(error => ({ ok: false, error }))
+      : Promise.resolve({ ok: false, error: new Error('指标目录接口未接入') });
+    const [resp, sourceList, catalogResult] = await Promise.all([
       getScreenCanvas(id),
-      listScreenDatasources()
+      listScreenDatasources(),
+      catalogPromise
     ]);
     if (disposed || token !== loadGeneration) return false;
     if (!resp || typeof resp !== 'object') throw new Error('服务端未返回当前屏草稿，已停止加载');
@@ -1207,6 +1546,7 @@ async function loadCanvas(requestedId = activeScreenId.value) {
     draftComponents.value = Array.isArray(draft.components) ? draft.components : [];
     resetBindings(draftComponents.value);
     datasources.value = Array.isArray(sourceList) ? sourceList : [];
+    metricCatalog.value = catalogResult.ok && catalogResult.rows.length ? catalogResult.rows : null;
     for (const binding of Object.values(bindingState)) fillProvenUnits(binding);
     selectedCatalogKey.value = catalogEntries.value[0]?.key || '';
     selectedComponentId.value = catalogEntries.value[0]?.sourceComponentId || '';
@@ -1223,6 +1563,10 @@ async function loadCanvas(requestedId = activeScreenId.value) {
     return true;
   } catch (loadError) {
     if (disposed || token !== loadGeneration) return false;
+    if (preservePublishState) {
+      publishRefreshWarning.value = '发布已成功，但未能刷新当前画布版本。正式大屏已经生效；请重新读取配置后再继续编辑或发布。';
+      return false;
+    }
     error.value = loadError?.message || '读取屏配置失败';
     emit('error', loadError);
     return false;
@@ -1235,6 +1579,111 @@ async function cancelLocalChanges() {
   if (!hasLocalChanges.value || writing.value || loading.value) return false;
   conflict.value = '';
   return loadCanvas(activeScreenId.value);
+}
+
+function openPublishDialog() {
+  if (!canStartPublish.value) return false;
+  publishError.value = '';
+  publishDialogError.value = '';
+  publishReason.value = '';
+  publishConfirmed.value = false;
+  publishContext.value = {
+    screenId: screenIdValue(activeScreenId.value),
+    expectedVersion: canvas.value?.canvasVersion,
+    generation: loadGeneration
+  };
+  publishDialogOpen.value = true;
+  return true;
+}
+
+function cancelPublishDialog() {
+  if (publishing.value) return false;
+  closePublishDialog();
+  return true;
+}
+
+function beforePublishDialogClose(done) {
+  if (publishing.value) return;
+  closePublishDialog();
+  done();
+}
+
+function handlePublishDialogClose() {
+  if (publishing.value) return;
+  closePublishDialog();
+}
+
+function publishIsCurrent(context) {
+  return !disposed && context?.generation === loadGeneration
+    && context?.screenId === screenIdValue(activeScreenId.value)
+    && context?.screenId === screenIdValue(canvas.value?.screenId || activeScreenId.value);
+}
+
+async function confirmPublish() {
+  if (publishing.value) return false;
+  if (!publishDialogOpen.value || !canConfirmPublish.value) {
+    publishDialogError.value = publishDisabledHint.value || '当前大屏状态已变化，请重新确认后再发布';
+    return false;
+  }
+  const reason = String(publishReason.value || '').trim();
+  if (!reason) {
+    publishDialogError.value = '请填写非空的发布原因';
+    return false;
+  }
+  if (!publishConfirmed.value) {
+    publishDialogError.value = '请确认大屏名称及正式生效影响';
+    return false;
+  }
+
+  const context = publishContext.value;
+  const screenId = screenIdValue(activeScreenId.value);
+  const expectedVersion = canvas.value?.canvasVersion;
+  if (!context || !publishIsCurrent(context) || context.screenId !== screenId
+      || context.expectedVersion !== expectedVersion || !Number.isSafeInteger(expectedVersion)
+      || expectedVersion < 0) {
+    publishError.value = '发布未开始：当前大屏或画布版本已变化，请重新读取并确认后再发布。草稿仍保留。';
+    closePublishDialog();
+    return false;
+  }
+
+  const screenName = activeScreenName.value;
+  const screenCode = String(activeScreen.value?.screenCode || activeScreen.value?.screen_code || '').trim();
+  publishing.value = true;
+  publishError.value = '';
+  publishRefreshWarning.value = '';
+  publishedResult.value = null;
+  try {
+    await publishScreenCanvas({ screenId, expectedVersion, reason });
+    if (!publishIsCurrent(context)) return false;
+
+    publishedResult.value = { screenId, screenName, screenCode };
+    closePublishDialog();
+    emit('published', { screenId, screenName, screenCode });
+    await loadCanvas(screenId, { preservePublishState: true });
+    return true;
+  } catch (publishFailure) {
+    if (!publishIsCurrent(context)) return false;
+    const status = Number(publishFailure?.response?.status || publishFailure?.status);
+    const code = String(publishFailure?.code || publishFailure?.response?.data?.code || '');
+    if (status === 403) {
+      publishError.value = '发布未完成：服务端拒绝了本次发布，请联系管理员核对发布权限。当前草稿已保留。';
+    } else if (code === 'RPT-43012') {
+      publishError.value = '发布未完成：画布版本已变化，请重新读取并核对后再发布。当前草稿已保留。';
+    } else {
+      publishError.value = `发布未完成：${publishFailure?.message || '请稍后重试'}。当前草稿已保留。`;
+    }
+    closePublishDialog();
+    return false;
+  } finally {
+    publishing.value = false;
+  }
+}
+
+function viewPublishedScreen() {
+  const screenCode = String(publishedResult.value?.screenCode || '').trim();
+  if (!screenCode || !router?.push) return false;
+  router.push({ name: 'ScreenView', params: { screenCode } });
+  return true;
 }
 
 function selectSlot(slot) {
@@ -1522,7 +1971,7 @@ function writeIsCurrent(targetId, token) {
 }
 
 async function saveDraft(options = {}) {
-  if (saving.value) return false;
+  if (writing.value) return false;
   const targetId = screenIdValue(options.targetId ?? activeScreenId.value);
   const token = options.generation ?? loadGeneration;
   if (!targetId || !writeIsCurrent(targetId, token)) return false;
@@ -1553,6 +2002,7 @@ async function saveDraft(options = {}) {
 }
 
 function preview() {
+  if (writing.value || loading.value) return false;
   if (hasLocalChanges.value) {
     error.value = '请先保存草稿再预览';
     return false;
@@ -1573,6 +2023,10 @@ function preview() {
 watch(() => props.screenId, async value => {
   const id = screenIdValue(value);
   if (id && screens.value.some(screen => Number(screen.id) === id)) {
+    if (publishing.value || publishDialogOpen.value) {
+      conflict.value = '发布确认或发布操作正在进行，完成前不能切换大屏。';
+      return;
+    }
     if (hasLocalChanges.value && !saving.value) {
       conflict.value = '外部请求切换大屏，但当前组件配置尚未保存；请先保存或取消修改。';
       return;
@@ -1588,6 +2042,10 @@ watch(() => route?.query?.screenId, async value => {
   const id = screenIdValue(value);
   if (id && screens.value.some(screen => Number(screen.id) === id)
       && String(id) !== String(activeScreenId.value)) {
+    if (publishing.value || publishDialogOpen.value) {
+      conflict.value = '发布确认或发布操作正在进行，完成前不能切换大屏。';
+      return;
+    }
     if (hasLocalChanges.value && !saving.value) {
       conflict.value = '路由请求切换大屏，但当前组件配置尚未保存；请先保存或取消修改。';
       return;
@@ -1642,6 +2100,16 @@ defineExpose({
 .panorama-bindings__error, .panorama-bindings__conflict { margin:0 0 14px; padding:10px 14px; border-radius:var(--radius-control, 4px); }
 .panorama-bindings__error { color:var(--color-danger-700, #a11a2b); background:var(--color-danger-50, #fff0f1); border:1px solid var(--color-danger-200, #ffd2d6); }
 .panorama-bindings__conflict { color:var(--color-warning-700, #8b5b00); background:var(--color-warning-50, #fff8e5); border:1px solid var(--color-warning-200, #f6df9d); }
+.panorama-bindings__publish-permission { margin:0 0 12px; color:var(--color-warning-700, #8b5b00); font-size:12px; }
+.panorama-bindings__publish-success, .panorama-bindings__publish-refresh-warning { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0 0 14px; padding:10px 14px; border-radius:var(--radius-control, 4px); font-size:13px; }
+.panorama-bindings__publish-success { color:var(--color-success-700, #16805d); background:var(--color-success-50, #edfaf5); border:1px solid var(--color-success-200, #b3ead6); }
+.panorama-bindings__publish-refresh-warning { color:var(--color-warning-700, #8b5b00); background:var(--color-warning-50, #fff8e5); border:1px solid var(--color-warning-200, #f6df9d); }
+.panorama-bindings__publish-version { color:var(--color-text-muted, #666); font-size:12px; }
+.panorama-bindings__publish-dialog textarea { display:block; width:100%; min-height:72px; box-sizing:border-box; padding:9px 10px; border:1px solid var(--color-border-strong, #c0c4cc); border-radius:var(--radius-control, 4px); background:var(--color-surface, #fff); color:var(--color-text, #303133); font:inherit; resize:vertical; }
+.panorama-bindings__publish-confirmation { display:flex; align-items:flex-start; gap:8px; margin-top:14px; color:var(--color-text-strong, #303133); font-size:13px; line-height:20px; }
+.panorama-bindings__publish-confirmation input { margin-top:3px; }
+.panorama-bindings__publish-dialog-actions { display:flex; justify-content:flex-end; gap:8px; }
+:deep(.panorama-bindings__publish-dialog.el-dialog) { width:min(560px, calc(100vw - 32px)); }
 .panorama-bindings__loading { margin:0 0 14px; color:var(--color-brand-700, #4767d8); }
 .panorama-bindings__legacy { display:flex; flex-direction:column; gap:8px; margin:0 0 14px; padding:12px 16px; color:var(--color-warning-700, #714c00); background:var(--color-warning-50, #fff8e5); border:1px solid var(--color-warning-200, #f6df9d); border-radius:var(--radius-control, 4px); font-size:13px; }
 .panorama-bindings__workbench { overflow:hidden; }
@@ -1669,6 +2137,7 @@ defineExpose({
 .panorama-bindings__field-row select, .panorama-bindings__component-field select { min-height:34px; min-width:0; padding:0 10px; border:1px solid var(--color-border-strong, #c0c4cc); border-radius:var(--radius-control, 4px); background:var(--color-surface, #fff); color:inherit; }
 .panorama-bindings__component-field select { width:100%; max-width:100%; box-sizing:border-box; }
 .panorama-bindings__comparison { display:block; min-width:0; margin-top:16px; padding:10px 12px; border:1px solid var(--color-border, #ebeef5); border-radius:var(--radius-control, 4px); background:var(--color-surface-subtle, #fafafa); }
+.panorama-bindings__comparison-mode { margin-top:16px; padding:10px 12px; border:1px solid var(--color-border, #ebeef5); border-radius:var(--radius-control, 4px); background:var(--color-surface-subtle, #fafafa); }
 .panorama-bindings__comparison summary { cursor:pointer; color:var(--color-text-strong, #303133); font-size:13px; font-weight:600; }
 .panorama-bindings__comparison-select { display:block; width:100%; max-width:100%; min-width:0; min-height:34px; box-sizing:border-box; padding:0 10px; border:1px solid var(--color-border-strong, #c0c4cc); border-radius:var(--radius-control, 4px); background:var(--color-surface, #fff); color:inherit; }
 .panorama-bindings__comparison-select--multiple { min-height:88px; padding:6px 10px; }

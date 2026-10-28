@@ -489,4 +489,93 @@ describe('displayMetricsModel', () => {
     expect(disabled.comparisons).toBeNull();
     expect(disabled.monthDelta).toBeNull();
   });
+
+  it('指标库期间比较用结果表增量替换待接入，未绑定槽位仍无数据', () => {
+    const card = component('business-retail-deposit-balance', 'METRIC_CARD', {
+      layoutRegion: 'HEADER',
+      dataRefs: [ref(31, 'deposit', '存款余额', 'YUAN')],
+      content: { mainField: '存款余额', subFields: [] },
+      format: { displayUnit: 'YUAN', decimals: 2 }
+    });
+    const presentation = { template: 'branch-overview-v1', displaySchemaVersion: 1, display: { components: [card] } };
+    const model = {
+      dataDate: '2026-10-15',
+      blockResults: { 31: { 存款余额: 1000, unitByField: { 存款余额: 'YUAN' } } },
+      periodComparisonConfig: {
+        'business-retail-deposit-balance': {
+          day: { mode: 'METRIC', metricCode: 'M_0266', outputColumn: '较上日增量', unit: 'YUAN', tableName: 'ORG_INDEX_RESULT' },
+          month: { mode: 'UNSET' },
+          year: { mode: 'OFFSET', metricCode: 'M_0277', outputColumn: '存款余额', unit: 'YUAN', tableName: 'ORG_INDEX_RESULT' }
+        }
+      },
+      periodComparisonSources: {
+        'business-retail-deposit-balance': [
+          { data_date: '2026-10-15', 较上日增量: 15, 存款余额: 1000 },
+          { data_date: '2025-12-31', 存款余额: 800 }
+        ]
+      }
+    };
+    const result = buildDisplayMetricsModel(presentation, model, { draftOverview: true }).components[0];
+    expect(result.comparisons.day).toMatchObject({ state: 'READY', baseValue: 15, referenceDate: '2026-10-14', text: '较昨日 +15.00元' });
+    expect(result.comparisons.year).toMatchObject({ state: 'READY', baseValue: 200, referenceDate: '2025-12-31' });
+    expect(result.comparisons.month.text).toContain('暂无数据');
+  });
+
+  it('指标卡完成率按 PERCENT/RATIO 格式化期间差值，正负零均以百分点展示', () => {
+    const card = component('completion-rate', 'METRIC_CARD', {
+      layoutRegion: 'LEFT',
+      dataRefs: [ref(31, 'rate', '完成率', 'RATIO')],
+      content: { mainField: 'rate', subFields: [] },
+      format: { displayUnit: 'PERCENT', decimals: 2, thousandsSeparator: false }
+    });
+    const presentation = { displaySchemaVersion: 1, display: { components: [card] } };
+    const build = previous => buildDisplayMetricsModel(presentation, {
+      dataDate: '2026-10-15',
+      blockResults: { 31: { rate: 0.6, unitByField: { rate: 'RATIO' } } },
+      periodComparisonConfig: {
+        'completion-rate': { month: { mode: 'OFFSET', metricCode: 'M_RATE', outputColumn: 'rate', unit: 'RATIO' } }
+      },
+      periodComparisonSources: { 'completion-rate': [{ data_date: '2026-09-30', rate: previous }] }
+    }).components[0];
+
+    expect(build(0.55).comparisons.month).toMatchObject({
+      state: 'READY', value: 5, baseValue: 5, unit: 'PERCENT', text: '较上月 +5.00个百分点'
+    });
+    expect(build(0.65).comparisons.month).toMatchObject({
+      state: 'READY', value: -5, baseValue: -5, unit: 'PERCENT', text: '较上月 -5.00个百分点'
+    });
+    expect(build(0.6).comparisons.month).toMatchObject({
+      state: 'READY', value: 0, baseValue: 0, unit: 'PERCENT', text: '较上月 0.00个百分点'
+    });
+  });
+
+  it('display.comparisons 关闭时优先于历史比较和指标库比较，指标卡不回退覆盖', () => {
+    const card = component('completion-rate-disabled', 'METRIC_CARD', {
+      layoutRegion: 'LEFT',
+      dataRefs: [ref(31, 'rate', '完成率', 'RATIO')],
+      content: { mainField: 'rate', subFields: [] },
+      format: { displayUnit: 'PERCENT', decimals: 2 }
+    });
+    const presentation = {
+      displaySchemaVersion: 1,
+      display: {
+        components: [card],
+        comparisons: { 'completion-rate-disabled': { enabled: false } }
+      }
+    };
+    const result = buildDisplayMetricsModel(presentation, {
+      dataDate: '2026-10-15',
+      blockResults: { 31: { rate: 0.6, unitByField: { rate: 'RATIO' } } },
+      comparisonResults: { 57: { rows: [
+        { data_date: '2026-10-15', rate: 0.6 }, { data_date: '2026-09-30', rate: 0.5 }
+      ], unitByField: { rate: 'RATIO' } } },
+      periodComparisonConfig: {
+        'completion-rate-disabled': { month: { mode: 'OFFSET', metricCode: 'M_RATE', outputColumn: 'rate', unit: 'RATIO' } }
+      },
+      periodComparisonSources: { 'completion-rate-disabled': [{ data_date: '2026-09-30', rate: 0.5 }] }
+    }).components[0];
+    expect(result.comparisonConfigured).toBe(true);
+    expect(result.comparisons).toBeNull();
+    expect(result.monthDelta).toBeNull();
+  });
 });
