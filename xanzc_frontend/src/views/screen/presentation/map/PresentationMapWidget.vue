@@ -44,7 +44,7 @@
     />
 
     <div class="presentation-map-widget__legend" aria-label="地图图例">
-      <span v-for="item in mapLegend" :key="item.key" :data-testid="`presentation-map-legend-${item.key}`"><i :style="{ background: item.color }" aria-hidden="true"></i>{{ item.label }}</span>
+      <span v-for="item in mapLegend" :key="item.key" :data-testid="`presentation-map-legend-${item.key}`"><i v-if="item.color" :class="{ 'is-outline-dashed': item.swatch === 'outline-dashed' }" :style="{ background: item.color }" aria-hidden="true"></i>{{ item.label }}</span>
       <small v-if="!legacyBranchProvinceMap">{{ displayMetricLabel || '当前指标' }} · {{ mapModel.metricUnit || '单位待补充' }}</small>
     </div>
 
@@ -63,16 +63,16 @@ import PanoramaMap from '../../panorama/PanoramaMap.vue';
 import {
   buildMapModel,
   MAP_MISSING_COLOR,
-  MAP_NO_INSTITUTION_COLOR,
   mapContextForCity,
   mapContextForInstitution
 } from './mapModel';
 import { screenDisplayText } from '../model/screenDisplayText';
 import { isBranchMapV2 } from '../../panorama/screenVariant.js';
-import { buildCityDistrictMapState, CITY_DISTRICT_HAS_INSTITUTION_COLOR } from '../../panorama/cityDistrictMapModel';
+import { buildCityDistrictMapState } from '../../panorama/cityDistrictMapModel';
 import { buildCityInstitutionDetails } from '../../panorama/cityMapDetails.js';
 import { buildProvinceInstitutionMapState } from '../../panorama/provinceInstitutionMapModel.js';
 import { provinceCityPaletteGradient, PROVINCE_NEUTRAL_COLOR } from '../../panorama/provinceCityPalette.js';
+import { cityDistrictPaletteGradient } from '../../panorama/cityDistrictPalette.js';
 
 const props = defineProps({
   presentation: { type: Object, default: () => ({}) },
@@ -109,11 +109,11 @@ const mapModel = computed(() => buildMapModel(props.presentation, props.model, {
 }));
 const cityDistrictMapState = computed(() => props.mode === 'city'
   ? buildCityDistrictMapState(props.geoJson, mapModel.value.institutions, { demo: props.demo })
-  : { regionStates: {}, metricColors: {}, viewFit: { focusRegionCodes: [], initialZoom: 1 }, occupiedRegionCodes: [], hasUnknownLocations: false });
+  : { regionStates: {}, metricColors: {}, districtColors: {}, viewFit: { focusRegionCodes: [], initialZoom: 1 }, occupiedRegionCodes: [], hasUnknownLocations: false });
 const mapRegionStates = computed(() => props.mode === 'city' && Object.keys(cityDistrictMapState.value.regionStates).length
   ? cityDistrictMapState.value.regionStates : mapModel.value.regionStates);
-const mapMetricColors = computed(() => props.mode === 'city' && Object.keys(cityDistrictMapState.value.metricColors).length
-  ? cityDistrictMapState.value.metricColors : mapModel.value.metricColors);
+const mapMetricColors = computed(() => props.mode === 'city' && Object.keys(cityDistrictMapState.value.districtColors).length
+  ? cityDistrictMapState.value.districtColors : mapModel.value.metricColors);
 const mapLegend = computed(() => {
   if (legacyBranchProvinceMap.value) {
     const states = new Set(Object.values(legacyBranchInstitutionState.value.regionStates || {}));
@@ -124,9 +124,9 @@ const mapLegend = computed(() => {
     ].filter(Boolean);
   }
   if (props.mode === 'city') return [
-    { key: 'has-institution', state: 'HAS_INSTITUTION', label: '有经营机构', color: CITY_DISTRICT_HAS_INSTITUTION_COLOR },
-    { key: 'no-institution', state: 'NO_INSTITUTION', label: '无经营机构', color: MAP_NO_INSTITUTION_COLOR },
-    { key: 'district-unknown', state: 'MISSING', label: '归属待确认', color: MAP_MISSING_COLOR }
+    { key: 'district-colors', state: 'DISTRICT_COLORS', label: '区县分色', color: cityDistrictPaletteGradient() },
+    { key: 'no-institution', state: 'NO_INSTITUTION', label: '无经营机构', color: 'transparent', swatch: 'outline-dashed' },
+    { key: 'district-unknown', state: 'MISSING', label: '归属待确认' }
   ];
   return [...(mapModel.value.legend || [])];
 });
@@ -198,6 +198,8 @@ function selectInstitution(institution) {
 .presentation-map-widget__legend span { display: inline-flex; align-items: center; gap: 4px; }
 .presentation-map-widget__legend i { width: 10px; height: 10px; border-radius: 50%; }
 .presentation-map-widget__legend [data-testid="presentation-map-legend-has-institution"] i { width: 32px; border-radius: 3px; }
+.presentation-map-widget__legend [data-testid="presentation-map-legend-district-colors"] i { width: 32px; border-radius: 3px; }
+.presentation-map-widget__legend [data-testid="presentation-map-legend-no-institution"] i.is-outline-dashed { box-sizing: border-box; width: 10px; height: 10px; border: 1px dashed #a4adbd; border-radius: 2px; background: transparent !important; }
 .presentation-map-widget__legend small { margin-left: auto; color: var(--panorama-text-dim, #8fa9db); }
 .presentation-map-widget__status, .presentation-map-widget__missing { margin: 8px 14px 12px; color: var(--panorama-amber, #ffc45e); font-size: 10px; }
 .presentation-map-widget__missing { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }

@@ -223,8 +223,47 @@ describe('地图指标联动显示', () => {
       }
     });
     await wrapper.vm.$nextTick();
-    expect(wrapper.get('path[data-region-code="610100"]').attributes('style')).toContain('#4f9da6');
+    expect(wrapper.get('path[data-region-code="610100"]').attributes('style')).toContain(provinceCityColor('610100'));
     expect(wrapper.get('path[data-region-code="610200"]').attributes('style')).toContain('#65738a');
+    wrapper.unmount();
+  });
+
+  it('市级分类色在选中和悬浮后恢复，NO_INSTITUTION 与 MISSING 状态不抹掉分类色', async () => {
+    const wrapper = mount(PanoramaMap, {
+      props: {
+        geoJson,
+        mode: 'city',
+        colorByMetric: true,
+        metricColors: { '610100': '#123456', '610200': '#654321' },
+        regionStates: { '610100': 'NO_INSTITUTION', '610200': 'MISSING' },
+        selectedRegionCode: '610100'
+      }
+    });
+    await wrapper.vm.$nextTick();
+
+    const noInstitutionGroup = wrapper.findAll('g.panorama-map__region')
+      .find(group => group.find('path[data-region-code="610100"]').exists());
+    const noInstitutionPath = noInstitutionGroup.get('path[data-region-code="610100"]');
+    const missingPath = wrapper.get('path[data-region-code="610200"]');
+    const selectedStyle = noInstitutionPath.attributes('style');
+    expect(noInstitutionGroup.classes()).toContain('is-no-institution');
+    expect(noInstitutionPath.attributes('data-region-state')).toBe('NO_INSTITUTION');
+    expect(selectedStyle).toContain('stroke-dasharray');
+    expect(selectedStyle).toContain('#2a4c6e');
+    expect(selectedStyle).toContain('#f3c8ff');
+    expect(selectedStyle).toContain('stroke-width: 0.65');
+    expect(selectedStyle).not.toContain('#65738a');
+    expect(missingPath.attributes('data-region-state')).toBe('MISSING');
+    expect(missingPath.attributes('style')).toContain('#654321');
+
+    await wrapper.setProps({ selectedRegionCode: null });
+    await wrapper.vm.$nextTick();
+    expect(noInstitutionPath.attributes('style')).toContain('#123456');
+    await noInstitutionPath.trigger('pointerenter');
+    expect(noInstitutionPath.attributes('style')).toContain('#2a4c6e');
+    await noInstitutionPath.trigger('pointerleave');
+    expect(noInstitutionPath.attributes('style')).toContain('#123456');
+
     wrapper.unmount();
   });
 
@@ -433,7 +472,7 @@ describe('城市悬浮详情', () => {
     wrapper.unmount();
   });
 
-  it('机构模式无经营机构地市把名称放回对应区域，有机构地市仍保留外围 callout', async () => {
+  it('机构模式无经营机构地市把名称放回对应区域并阻止下钻，有机构地市仍保留外围 callout', async () => {
     const cityDetails = {
       '610100': { institutionCount: 1, institutions: [{ orgCode: 'XIAN-1', orgName: '西安一支行' }] },
       '610200': { institutionCount: 0, institutions: [] }
@@ -464,7 +503,8 @@ describe('城市悬浮详情', () => {
     expect(style).toContain(`left: ${expected.x}%`);
     expect(style).toContain(`top: ${expected.y}%`);
     await emptyLabel.trigger('click');
-    expect(wrapper.emitted('region-select')).toContainEqual([{ code: '610200', name: '铜川市' }]);
+    expect(wrapper.emitted('region-select')).toBeUndefined();
+    expect(wrapper.get('[data-testid="map-activation-status"]').text()).toBe('该地区无经营机构');
     wrapper.unmount();
   });
 

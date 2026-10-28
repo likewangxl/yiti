@@ -4,6 +4,7 @@ import {
   MAP_NO_INSTITUTION_COLOR,
   MAP_PALETTE
 } from '../presentation/map/mapModel';
+import { cityDistrictColors } from './cityDistrictPalette.js';
 
 export const CITY_DISTRICT_HAS_INSTITUTION_COLOR = MAP_PALETTE.mid;
 
@@ -158,7 +159,7 @@ function featureCenter(polygons) {
 }
 
 function emptyViewFit() {
-  return { focusRegionCodes: [], initialZoom: 1 };
+  return { focusRegionCodes: [], initialZoom: 2 };
 }
 
 /**
@@ -199,6 +200,7 @@ export function buildCityDistrictMapState(geoJson, institutions, { demo = false 
     code,
     occupied.has(code) ? 'HAS_INSTITUTION' : hasCompleteDirectory ? 'NO_INSTITUTION' : 'MISSING'
   ]));
+  const districtColors = cityDistrictColors(codes);
   const metricColors = Object.fromEntries(codes.map(code => {
     const state = regionStates[code];
     return [code, state === 'HAS_INSTITUTION'
@@ -212,7 +214,7 @@ export function buildCityDistrictMapState(geoJson, institutions, { demo = false 
     if (centers.length) {
       viewFit.focusRegionCodes = occupiedRegionCodes;
       viewFit.focusCenterMode = 'OCCUPIED_BOUNDS';
-      viewFit.initialZoom = 1.65;
+      viewFit.initialZoom = 3.3;
       viewFit.focusCenter = centers.reduce((center, item) => ({
         lng: center.lng + item.lng / centers.length,
         lat: center.lat + item.lat / centers.length
@@ -220,7 +222,7 @@ export function buildCityDistrictMapState(geoJson, institutions, { demo = false 
     }
   }
 
-  return { regionStates, metricColors, occupiedRegionCodes, viewFit, hasUnknownLocations };
+  return { regionStates, metricColors, districtColors, occupiedRegionCodes, viewFit, hasUnknownLocations };
 }
 
 export default buildCityDistrictMapState;

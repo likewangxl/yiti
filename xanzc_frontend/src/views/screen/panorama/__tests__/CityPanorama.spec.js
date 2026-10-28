@@ -5,8 +5,8 @@ import { mount } from '@vue/test-utils';
 vi.mock('../PanoramaMap.vue', () => ({
   default: {
     name: 'PanoramaMap',
-    props: ['pointLabelLayout'],
-    template: '<div class="city-map-stub" :data-point-label-layout="pointLabelLayout"><button type="button" class="map-branch-1" @click="$emit(\'branch-select\', \'ORG-1\')">地图支行1</button><button type="button" class="map-branch-2" @click="$emit(\'branch-select\', \'ORG-7\')">地图支行7</button></div>',
+    props: ['pointLabelLayout', 'regionStates', 'metricColors', 'viewFit'],
+    template: '<div class="city-map-stub" :data-point-label-layout="pointLabelLayout" :data-region-states="JSON.stringify(regionStates)" :data-metric-colors="JSON.stringify(metricColors)" :data-view-fit="JSON.stringify(viewFit)"><button type="button" class="map-branch-1" @click="$emit(\'branch-select\', \'ORG-1\')">地图支行1</button><button type="button" class="map-branch-2" @click="$emit(\'branch-select\', \'ORG-7\')">地图支行7</button></div>',
     emits: ['branch-select']
   }
 }));
@@ -73,6 +73,18 @@ function mountCity(overrides = {}) {
 
 describe('CityPanorama 市级支行全景', () => {
   afterEach(() => mounted.splice(0).forEach(wrapper => wrapper.unmount()));
+
+  it('直连市级地图透传区县分类色，并在图例解释区县分色', () => {
+    const wrapper = mountCity();
+    const map = wrapper.get('.city-map-stub');
+    const districtColors = JSON.parse(map.attributes('data-metric-colors'));
+
+    expect(Object.keys(districtColors)).toHaveLength(13);
+    expect(new Set(Object.values(districtColors)).size).toBe(13);
+    expect(JSON.parse(map.attributes('data-view-fit')).initialZoom).toBe(2);
+    expect(wrapper.get('[data-testid="city-district-color-legend"]').text()).toContain('区县分色');
+    expect(wrapper.get('.city-map-legend').text()).toContain('聚合网点');
+  });
 
   it('只按显式 cityCode 筛选机构，缺失值显示 — 且不出现 NaN', () => {
     const wrapper = mountCity();

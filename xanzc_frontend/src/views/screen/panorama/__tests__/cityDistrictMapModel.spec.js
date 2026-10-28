@@ -55,11 +55,22 @@ describe('cityDistrictMapModel', () => {
       'D-B': CITY_DISTRICT_HAS_INSTITUTION_COLOR,
       'D-C': MAP_NO_INSTITUTION_COLOR
     });
+    expect(Object.keys(result.districtColors).sort()).toEqual(['D-A', 'D-B', 'D-C']);
+    expect(new Set(Object.values(result.districtColors)).size).toBe(3);
     expect(result.hasUnknownLocations).toBe(false);
     expect(result.viewFit.focusRegionCodes).toEqual(['D-A', 'D-B']);
     expect(result.viewFit.focusCenterMode).toBe('OCCUPIED_BOUNDS');
-    expect(result.viewFit.initialZoom).toBe(1.65);
+    expect(result.viewFit.initialZoom).toBe(3.3);
     expect(result.viewFit.focusCenter).toEqual({ lng: 1, lat: 0.5 });
+  });
+
+  it('区县分类色按行政代码稳定映射，GeoJSON 乱序及 MultiPolygon 不会改变颜色', () => {
+    const first = buildCityDistrictMapState(geoJson, []);
+    const shuffled = buildCityDistrictMapState({ ...geoJson, features: [...geoJson.features].reverse() }, []);
+
+    expect(first.districtColors).toEqual(shuffled.districtColors);
+    expect(first.districtColors['D-C']).toBe(shuffled.districtColors['D-C']);
+    expect(Object.keys(first.districtColors)).toHaveLength(3);
   });
 
   it('holes、出界和非法坐标进入未知态，未确认区县不误判为无机构', () => {
@@ -74,7 +85,7 @@ describe('cityDistrictMapModel', () => {
     expect(Object.values(result.metricColors)).toEqual([MAP_MISSING_COLOR, MAP_MISSING_COLOR, MAP_MISSING_COLOR]);
     expect(result.occupiedRegionCodes).toEqual([]);
     expect(result.viewFit.focusRegionCodes).toEqual([]);
-    expect(result.viewFit.initialZoom).toBe(1);
+    expect(result.viewFit.initialZoom).toBe(2);
   });
 
   it('空目录保留当前授权范围待确认态，避免把全局无机构误报成区县无机构', () => {
@@ -83,6 +94,13 @@ describe('cityDistrictMapModel', () => {
     expect(result.regionStates).toEqual({ 'D-A': 'MISSING', 'D-B': 'MISSING', 'D-C': 'MISSING' });
     expect(result.occupiedRegionCodes).toEqual([]);
     expect(result.hasUnknownLocations).toBe(false);
-    expect(result.viewFit).toEqual({ focusRegionCodes: [], initialZoom: 1 });
+    expect(result.viewFit).toEqual({ focusRegionCodes: [], initialZoom: 2 });
+  });
+
+  it('缺少 geo 边界时也使用 2 倍默认缩放', () => {
+    const result = buildCityDistrictMapState(null, []);
+
+    expect(result.districtColors).toEqual({});
+    expect(result.viewFit).toEqual({ focusRegionCodes: [], initialZoom: 2 });
   });
 });
