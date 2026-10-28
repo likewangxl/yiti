@@ -881,38 +881,34 @@ const cityDetailStyle = computed(() => {
   const rect = containerRef.value?.getBoundingClientRect();
   if (!rect || !activeCityDetail.value) return {};
   const width = Math.min(304, window.innerWidth - 24);
-  if (props.cityDetailMode === 'institutions' && isCalloutLayout.value) {
-    const code = String(activeCityDetail.value.region.code);
-    const label = [...(containerRef.value.querySelectorAll('.panorama-map__region-label-hit[data-city-code]') || [])]
-      .find(element => String(element.getAttribute('data-city-code')) === code);
-    const excludedRect = containerRef.value.closest?.('.presentation-map-widget')?.getBoundingClientRect?.()
-      || containerRef.value.closest?.('.panorama-map-panel')?.getBoundingClientRect?.()
-      || rect;
-    const position = positionCityTooltip({
-      mapRect: excludedRect,
-      labelRect: label?.getBoundingClientRect?.() || rect,
-      tooltipWidth: width,
-      tooltipHeight: cityDetailHeight.value,
-      viewport: { width: window.innerWidth, height: window.innerHeight },
-      side: calloutLayout.value[activeCityDetail.value.region.key]?.side,
-      gap: 10,
-      margin: 12
-    });
-    if (!position) return { display: 'none' };
-    return {
-      ...cityAccentStyle(activeCityDetail.value.region),
-      width: `${position.width}px`,
-      left: `${position.left}px`,
-      top: `${position.top}px`,
-      maxHeight: `${position.maxHeight}px`,
-      overflowY: 'auto'
-    };
-  }
+  const code = String(activeCityDetail.value.region.code);
+  const label = [...(containerRef.value.querySelectorAll('.panorama-map__region-label-hit[data-city-code]') || [])]
+    .find(element => String(element.getAttribute('data-city-code')) === code);
+  const labelRect = label?.getBoundingClientRect?.() || rect;
+  const excludedRect = containerRef.value.closest?.('.presentation-map-widget')?.getBoundingClientRect?.()
+    || containerRef.value.closest?.('.panorama-map-panel')?.getBoundingClientRect?.()
+    || rect;
+  const inlineSide = labelRect.left + labelRect.width / 2 <= rect.left + rect.width / 2 ? 'left' : 'right';
+  const position = positionCityTooltip({
+    mapRect: excludedRect,
+    labelRect,
+    tooltipWidth: width,
+    tooltipHeight: cityDetailHeight.value,
+    viewport: { width: window.innerWidth, height: window.innerHeight },
+    side: isCalloutLayout.value
+      ? calloutLayout.value[activeCityDetail.value.region.key]?.side
+      : inlineSide,
+    gap: 10,
+    margin: 12
+  });
+  if (!position) return { display: 'none' };
   return {
     ...cityAccentStyle(activeCityDetail.value.region),
-    width: `${width}px`,
-    left: `${Math.max(12, Math.min(window.innerWidth - width - 12, rect.left + rect.width / 2 - width / 2))}px`,
-    top: `${Math.max(12, Math.min(window.innerHeight - cityDetailHeight.value - 12, rect.top + rect.height / 2 - cityDetailHeight.value / 2))}px`
+    width: `${position.width}px`,
+    left: `${position.left}px`,
+    top: `${position.top}px`,
+    maxHeight: `${position.maxHeight}px`,
+    overflowY: 'auto'
   };
 });
 

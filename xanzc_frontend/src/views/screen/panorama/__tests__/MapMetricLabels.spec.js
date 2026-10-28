@@ -24,6 +24,78 @@ function pointInRing(point, ring) {
 function pointInRegion(point, region) {
   return pointInRing(point, region.outer) && !region.holes.some(hole => pointInRing(point, hole));
 }
+
+function rectangle(left, top, width, height) {
+  return { left, top, right: left + width, bottom: top + height, width, height };
+}
+
+function rectanglesIntersect(first, second) {
+  return first.left < second.right && first.right > second.left
+    && first.top < second.bottom && first.bottom > second.top;
+}
+
+function mountMapWithTooltipGeometry(props) {
+  const originalViewport = {
+    width: Object.getOwnPropertyDescriptor(window, 'innerWidth'),
+    height: Object.getOwnPropertyDescriptor(window, 'innerHeight')
+  };
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1800 });
+  Object.defineProperty(window, 'innerHeight', { configurable: true, value: 1100 });
+
+  const widget = document.createElement('div');
+  widget.className = 'presentation-map-widget';
+  const host = document.createElement('div');
+  widget.appendChild(host);
+  document.body.appendChild(widget);
+
+  const widgetRect = rectangle(450, 150, 900, 700);
+  const mapRect = rectangle(600, 220, 600, 560);
+  widget.getBoundingClientRect = () => widgetRect;
+  const wrapper = mount(PanoramaMap, {
+    attachTo: host,
+    global: { stubs: { Teleport: true } },
+    props
+  });
+  wrapper.element.getBoundingClientRect = () => mapRect;
+  wrapper.findAll('.panorama-map__region-label-hit[data-city-code]').forEach(label => {
+    const code = label.attributes('data-city-code');
+    const labelRect = code === '610200'
+      ? rectangle(1030, 440, 92, 36)
+      : rectangle(680, 390, 92, 36);
+    label.element.getBoundingClientRect = () => labelRect;
+  });
+
+  return {
+    wrapper,
+    mapRect,
+    widgetRect,
+    cleanup() {
+      wrapper.unmount();
+      widget.remove();
+      for (const [key, descriptor] of Object.entries(originalViewport)) {
+        if (descriptor) Object.defineProperty(window, key === 'width' ? 'innerWidth' : 'innerHeight', descriptor);
+        else delete window[key === 'width' ? 'innerWidth' : 'innerHeight'];
+      }
+    }
+  };
+}
+
+async function hoverCityTooltip(wrapper, code) {
+  await wrapper.get(`button[data-city-code="${code}"]`).trigger('pointerenter');
+  await nextTick();
+  await nextTick();
+  return wrapper.get('[role="tooltip"]');
+}
+
+function tooltipRectangle(tooltip) {
+  return rectangle(
+    Number.parseFloat(tooltip.element.style.left) || 0,
+    Number.parseFloat(tooltip.element.style.top) || 0,
+    Number.parseFloat(tooltip.element.style.width) || 304,
+    420
+  );
+}
+
 describe('地图指标联动显示', () => {
   it('按调用方已确认的范围显示指标，切换后更新且无数据不补零', async () => {
     const wrapper = mount(PanoramaMap, { props: { geoJson: { ...geoJson, features: [geoJson.features[0]] }, metricLabel: '存款余额', metricValues: { '610100': '125万元' } } });
@@ -185,6 +257,83 @@ describe('地图指标联动显示', () => {
 
 
 describe('城市悬浮详情', () => {
+  it('metrics inline 和 callout 悬浮详情都定位在地图外侧，不与 widget 或地图相交', async () => {
+    const details = {
+      '610100': { institutionCount: 2, metrics: [{ key: 'deposit', label: '存款余额', value: '125万元' }] },
+      '610200': { institutionCount: 1, metrics: [{ key: 'deposit', label: '存款余额', value: '20万元' }] }
+    };
+    const inline = mountMapWithTooltipGeometry({
+      geoJson,
+      appearance: 'relief',
+      labelLayout: 'inline',
+      cityDetailMode: 'metrics',
+      metricValues: { '610100': '125万元', '610200': '20万元' },
+      cityDetails: details
+    });
+    try {
+      const tooltip = await hoverCityTooltip(inline.wrapper, '610100');
+      const position = tooltipRectangle(tooltip);
+      expect(position.left + position.width).toBeLessThanOrEqual(inline.widgetRect.left);
+      expect(rectanglesIntersect(position, inline.widgetRect)).toBe(false);
+      expect(rectanglesIntersect(position, inline.mapRect)).toBe(false);
+    } finally {
+      inline.cleanup();
+    }
+
+    const callout = mountMapWithTooltipGeometry({
+      geoJson,
+      appearance: 'relief',
+      labelLayout: 'callout',
+      cityDetailMode: 'metrics',
+      metricValues: { '610100': '125万元', '610200': '20万元' },
+      cityDetails: details
+    });
+    try {
+      const leftTooltip = await hoverCityTooltip(callout.wrapper, '610100');
+      const leftPosition = tooltipRectangle(leftTooltip);
+      expect(leftPosition.left + leftPosition.width).toBeLessThanOrEqual(callout.widgetRect.left);
+      expect(rectanglesIntersect(leftPosition, callout.widgetRect)).toBe(false);
+      expect(rectanglesIntersect(leftPosition, callout.mapRect)).toBe(false);
+
+      await callout.wrapper.get('button[data-city-code="610100"]').trigger('pointerleave');
+      await nextTick();
+      const rightTooltip = await hoverCityTooltip(callout.wrapper, '610200');
+      const rightPosition = tooltipRectangle(rightTooltip);
+      expect(rightPosition.left).toBeGreaterThanOrEqual(callout.widgetRect.right);
+      expect(rectanglesIntersect(rightPosition, callout.widgetRect)).toBe(false);
+      expect(rectanglesIntersect(rightPosition, callout.mapRect)).toBe(false);
+    } finally {
+      callout.cleanup();
+    }
+  });
+
+  it('机构模式的 callout popup 继续位于地图外围左右列', async () => {
+    const institution = orgName => ({ institutionCount: 1, institutions: [{ orgCode: orgName, orgName }] });
+    const geometry = mountMapWithTooltipGeometry({
+      geoJson,
+      labelLayout: 'callout',
+      cityDetailMode: 'institutions',
+      cityDetails: { '610100': institution('西安支行'), '610200': institution('铜川支行') }
+    });
+    try {
+      const leftTooltip = await hoverCityTooltip(geometry.wrapper, '610100');
+      const leftPosition = tooltipRectangle(leftTooltip);
+      expect(leftPosition.left + leftPosition.width).toBeLessThanOrEqual(geometry.widgetRect.left);
+      expect(rectanglesIntersect(leftPosition, geometry.widgetRect)).toBe(false);
+      expect(rectanglesIntersect(leftPosition, geometry.mapRect)).toBe(false);
+
+      await geometry.wrapper.get('button[data-city-code="610100"]').trigger('pointerleave');
+      await nextTick();
+      const rightTooltip = await hoverCityTooltip(geometry.wrapper, '610200');
+      const rightPosition = tooltipRectangle(rightTooltip);
+      expect(rightPosition.left).toBeGreaterThanOrEqual(geometry.widgetRect.right);
+      expect(rectanglesIntersect(rightPosition, geometry.widgetRect)).toBe(false);
+      expect(rectanglesIntersect(rightPosition, geometry.mapRect)).toBe(false);
+    } finally {
+      geometry.cleanup();
+    }
+  });
+
   it('悬停和键盘聚焦展示已有指标、机构与日期，离开后收起', async () => {
     const wrapper=mount(PanoramaMap,{global:{stubs:{Teleport:true}},props:{geoJson,labelLayout:'callout',metricValues:{'610100':'125万元'},cityDetails:{'610100':{institutionCount:2,locatedCount:1,dataDate:'2026-08-30',metrics:[{key:'deposit',label:'存款余额',value:'125万元'},{key:'loan',label:'贷款余额',value:'暂无数据'}],institutions:[{orgCode:'A',orgName:'西安一支行'},{orgCode:'B',orgName:'西安二支行'}]}}}});
     const label=wrapper.get('button[data-city-code="610100"]');
