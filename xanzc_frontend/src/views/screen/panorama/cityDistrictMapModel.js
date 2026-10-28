@@ -200,7 +200,11 @@ export function buildCityDistrictMapState(geoJson, institutions, { demo = false 
     code,
     occupied.has(code) ? 'HAS_INSTITUTION' : hasCompleteDirectory ? 'NO_INSTITUTION' : 'MISSING'
   ]));
-  const districtColors = cityDistrictColors(codes);
+  const palette = cityDistrictColors(codes);
+  const districtColors = Object.fromEntries(codes.map(code => [code,
+    regionStates[code] === 'HAS_INSTITUTION' ? palette[code]
+      : regionStates[code] === 'NO_INSTITUTION' ? MAP_NO_INSTITUTION_COLOR : MAP_MISSING_COLOR
+  ]));
   const metricColors = Object.fromEntries(codes.map(code => {
     const state = regionStates[code];
     return [code, state === 'HAS_INSTITUTION'

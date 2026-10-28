@@ -80,9 +80,10 @@ describe('CityPanorama 市级支行全景', () => {
     const districtColors = JSON.parse(map.attributes('data-metric-colors'));
 
     expect(Object.keys(districtColors)).toHaveLength(13);
-    expect(new Set(Object.values(districtColors)).size).toBe(13);
+    expect(new Set(Object.values(districtColors)).size).toBe(1);
+    expect(Object.values(districtColors)[0]).toBe('#65738a');
     expect(JSON.parse(map.attributes('data-view-fit')).initialZoom).toBe(2);
-    expect(wrapper.get('[data-testid="city-district-color-legend"]').text()).toContain('区县分色');
+    expect(wrapper.get('[data-testid="city-district-color-legend"]').text()).toContain('有经营机构区县');
     expect(wrapper.get('.city-map-legend').text()).toContain('聚合网点');
   });
 

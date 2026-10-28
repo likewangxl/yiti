@@ -87,7 +87,7 @@
           :selected-region-code="cityCode"
           @branch-select="selectBranch"
         />
-        <div class="city-map-legend"><span data-testid="city-district-color-legend"><i :style="{ background: cityDistrictPaletteGradient(), width: '36px', borderRadius: '4px' }" />区县分色</span><span><i class="is-cyan" />支行</span><span><i class="is-amber" />经营关注</span><span><i class="is-ring" />聚合网点</span><span v-if="cityDistrictMapState.hasNoInstitutionRegions">无机构</span><span v-if="cityDistrictMapState.hasUnknownLocations">归属待确认</span></div>
+        <div class="city-map-legend"><span data-testid="city-district-color-legend"><i :style="{ background: cityDistrictPaletteGradient(), width: '36px', borderRadius: '4px' }" />有经营机构区县</span><span><i class="is-cyan" />支行</span><span><i class="is-amber" />经营关注</span><span><i class="is-ring" />聚合网点</span><span v-if="cityDistrictMapState.hasNoInstitutionRegions">无机构</span><span v-if="cityDistrictMapState.hasUnknownLocations">归属待确认</span></div>
         <div class="city-coordinate-note">已定位 {{ locatedInstitutions.length }} 家 <span>|</span> 待补充坐标 {{ missingCoordinates.length }} 家</div>
         <p v-if="!cityInstitutions.length" class="city-inline-status city-no-visible-institutions" data-testid="city-no-visible-institutions" role="status">当前城市暂无可见机构</p>
       </article>

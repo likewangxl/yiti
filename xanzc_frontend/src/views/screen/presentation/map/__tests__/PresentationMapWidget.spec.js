@@ -205,10 +205,10 @@ describe('PresentationMapWidget', () => {
     });
     const map = wrapper.getComponent(mapStub);
     expect(map.props('regionStates')).toMatchObject({ 'D-A': 'HAS_INSTITUTION', 'D-B': 'NO_INSTITUTION' });
-    expect(map.props('metricColors')).toEqual(cityDistrictColors(['D-A', 'D-B']));
+    expect(map.props('metricColors')).toEqual({ 'D-A': cityDistrictColors(['D-A', 'D-B'])['D-A'], 'D-B': '#26364d' });
     expect(map.props('showRegionMetrics')).toBe(false);
     expect(map.props('viewFit')).toMatchObject({ focusRegionCodes: ['D-A'], initialZoom: 3.3 });
-    expect(wrapper.get('[data-testid="presentation-map-legend-district-colors"]').text()).toBe('区县分色');
+    expect(wrapper.get('[data-testid="presentation-map-legend-district-colors"]').text()).toBe('有经营机构区县');
     expect(wrapper.get('[data-testid="presentation-map-legend-district-colors"] i').attributes('style')).toContain('linear-gradient');
     expect(wrapper.get('[data-testid="presentation-map-legend-no-institution"]').text()).toBe('无经营机构');
     expect(wrapper.get('[data-testid="presentation-map-legend-no-institution"] i').classes()).toContain('is-outline-dashed');
@@ -234,7 +234,7 @@ describe('PresentationMapWidget', () => {
     const map = wrapper.getComponent(mapStub);
     expect(map.props('regionStates')['D-A']).toBe('HAS_INSTITUTION');
     expect(map.props('regionStates')['D-B']).toBe('MISSING');
-    expect(map.props('metricColors')).toEqual(cityDistrictColors(['D-A', 'D-B']));
+    expect(map.props('metricColors')).toEqual({ 'D-A': cityDistrictColors(['D-A', 'D-B'])['D-A'], 'D-B': '#65738a' });
     wrapper.unmount();
   });
 

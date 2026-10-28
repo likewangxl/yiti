@@ -312,6 +312,7 @@ import {
 import { createMapCalloutPath, layoutMapCallouts, layoutMapLabels, layoutPointCallouts } from './mapLabelLayout';
 import { positionCityTooltip } from './mapCityTooltipLayout';
 import { provinceCityColor } from './provinceCityPalette';
+import { MAP_MISSING_COLOR, MAP_NO_INSTITUTION_COLOR } from '../presentation/map/mapModel';
 import { pickInteractiveHit, pickRegionSurfaceHit } from './panoramaMapHit';
 const props = defineProps({
   geoJson: { type: Object, default: () => ({ type: 'FeatureCollection', features: [] }) },
@@ -791,7 +792,7 @@ function metricStyle(region) {
     return { fill: active ? highlightCityColor(baseColor) : baseColor, '--city-color': baseColor };
   }
   if (!props.colorByMetric) return undefined;
-  const color = props.metricColors?.[region.code] || '#65738a';
+  const color = metricColorForCode(region.code);
   if (props.mode === 'city') {
     const active = String(region.code) === String(hoveredRegionCode.value)
       || String(region.code) === String(props.selectedRegionCode);
@@ -807,7 +808,11 @@ function metricStyle(region) {
 }
 
 function metricColorForCode(code) {
-  return props.metricColors?.[code] || '#65738a';
+  if (props.mode === 'city') {
+    if (props.regionStates?.[code] === 'NO_INSTITUTION') return MAP_NO_INSTITUTION_COLOR;
+    if (props.regionStates?.[code] === 'MISSING') return MAP_MISSING_COLOR;
+  }
+  return props.metricColors?.[code] || MAP_MISSING_COLOR;
 }
 
 function cityStateForCode(code) {

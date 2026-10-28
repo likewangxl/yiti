@@ -124,7 +124,7 @@ const mapLegend = computed(() => {
     ].filter(Boolean);
   }
   if (props.mode === 'city') return [
-    { key: 'district-colors', state: 'DISTRICT_COLORS', label: '区县分色', color: cityDistrictPaletteGradient() },
+    { key: 'district-colors', state: 'DISTRICT_COLORS', label: '有经营机构区县', color: cityDistrictPaletteGradient() },
     { key: 'no-institution', state: 'NO_INSTITUTION', label: '无经营机构', color: 'transparent', swatch: 'outline-dashed' },
     { key: 'district-unknown', state: 'MISSING', label: '归属待确认' }
   ];

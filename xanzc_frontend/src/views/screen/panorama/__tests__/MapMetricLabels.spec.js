@@ -228,7 +228,7 @@ describe('地图指标联动显示', () => {
     wrapper.unmount();
   });
 
-  it('市级分类色在选中和悬浮后恢复，NO_INSTITUTION 与 MISSING 状态不抹掉分类色', async () => {
+  it('市级无机构与归属待确认区县保持中性色，选中和悬浮不恢复分类色', async () => {
     const wrapper = mount(PanoramaMap, {
       props: {
         geoJson,
@@ -249,20 +249,20 @@ describe('地图指标联动显示', () => {
     expect(noInstitutionGroup.classes()).toContain('is-no-institution');
     expect(noInstitutionPath.attributes('data-region-state')).toBe('NO_INSTITUTION');
     expect(selectedStyle).toContain('stroke-dasharray');
-    expect(selectedStyle).toContain('#2a4c6e');
+    expect(selectedStyle).toContain('#3e4e65');
     expect(selectedStyle).toContain('#f3c8ff');
     expect(selectedStyle).toContain('stroke-width: 0.65');
-    expect(selectedStyle).not.toContain('#65738a');
+    expect(selectedStyle).not.toContain('#123456');
     expect(missingPath.attributes('data-region-state')).toBe('MISSING');
-    expect(missingPath.attributes('style')).toContain('#654321');
+    expect(missingPath.attributes('style')).toContain('#65738a');
 
     await wrapper.setProps({ selectedRegionCode: null });
     await wrapper.vm.$nextTick();
-    expect(noInstitutionPath.attributes('style')).toContain('#123456');
+    expect(noInstitutionPath.attributes('style')).toContain('#26364d');
     await noInstitutionPath.trigger('pointerenter');
-    expect(noInstitutionPath.attributes('style')).toContain('#2a4c6e');
+    expect(noInstitutionPath.attributes('style')).toContain('#3e4e65');
     await noInstitutionPath.trigger('pointerleave');
-    expect(noInstitutionPath.attributes('style')).toContain('#123456');
+    expect(noInstitutionPath.attributes('style')).toContain('#26364d');
 
     wrapper.unmount();
   });

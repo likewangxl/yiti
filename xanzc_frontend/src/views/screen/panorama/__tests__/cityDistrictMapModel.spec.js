@@ -56,7 +56,8 @@ describe('cityDistrictMapModel', () => {
       'D-C': MAP_NO_INSTITUTION_COLOR
     });
     expect(Object.keys(result.districtColors).sort()).toEqual(['D-A', 'D-B', 'D-C']);
-    expect(new Set(Object.values(result.districtColors)).size).toBe(3);
+    expect(result.districtColors['D-A']).not.toBe(result.districtColors['D-B']);
+    expect(result.districtColors['D-C']).toBe(MAP_NO_INSTITUTION_COLOR);
     expect(result.hasUnknownLocations).toBe(false);
     expect(result.viewFit.focusRegionCodes).toEqual(['D-A', 'D-B']);
     expect(result.viewFit.focusCenterMode).toBe('OCCUPIED_BOUNDS');
@@ -83,6 +84,7 @@ describe('cityDistrictMapModel', () => {
     expect(result.hasUnknownLocations).toBe(true);
     expect(Object.values(result.regionStates)).toEqual(['MISSING', 'MISSING', 'MISSING']);
     expect(Object.values(result.metricColors)).toEqual([MAP_MISSING_COLOR, MAP_MISSING_COLOR, MAP_MISSING_COLOR]);
+    expect(Object.values(result.districtColors)).toEqual([MAP_MISSING_COLOR, MAP_MISSING_COLOR, MAP_MISSING_COLOR]);
     expect(result.occupiedRegionCodes).toEqual([]);
     expect(result.viewFit.focusRegionCodes).toEqual([]);
     expect(result.viewFit.initialZoom).toBe(2);
