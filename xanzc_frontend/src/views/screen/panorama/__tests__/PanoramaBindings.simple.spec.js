@@ -7,6 +7,7 @@ const api = vi.hoisted(() => ({
   getScreenCanvas: vi.fn(),
   listScreenDatasources: vi.fn(),
   saveScreenCanvas: vi.fn(),
+  publishScreenCanvas: vi.fn(),
   listScreenMetricCatalog: vi.fn(async () => []),
   saveScreenDatasource: vi.fn(),
   tryRunScreenDatasource: vi.fn()
@@ -16,10 +17,16 @@ vi.mock('@/api/screen', () => ({
   getScreenCanvas: api.getScreenCanvas,
   listScreenDatasources: api.listScreenDatasources,
   saveScreenCanvas: api.saveScreenCanvas,
+  publishScreenCanvas: api.publishScreenCanvas,
   listScreenMetricCatalog: api.listScreenMetricCatalog,
   saveScreenDatasource: api.saveScreenDatasource,
   tryRunScreenDatasource: api.tryRunScreenDatasource
 }));
+
+const { permissionStore } = vi.hoisted(() => ({ permissionStore: {
+  loaded: true, canAccess: vi.fn(() => true), load: vi.fn()
+} }));
+vi.mock('@/stores/permission', () => ({ usePermissionStore: () => permissionStore }));
 
 const router = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock('vue-router', () => ({
@@ -208,7 +215,7 @@ describe('PanoramaBindings simplified designer', () => {
 
   afterEach(() => vi.restoreAllMocks());
 
-  it('只保留选屏、组件绑定、预览和保存入口', async () => {
+  it('保留选屏、组件绑定、预览、保存和独立发布入口', async () => {
     prepare(legacyCanvas());
     const wrapper = mount(PanoramaBindings, { props: { screenId: 9 } });
     await vi.waitFor(() => expect(wrapper.find('[data-testid="screen-select"]').exists()).toBe(true));
@@ -219,7 +226,8 @@ describe('PanoramaBindings simplified designer', () => {
     expect(wrapper.find('[data-testid="binding-settings"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="binding-datasources"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="binding-auto-empty"]').exists()).toBe(false);
-    expect(wrapper.find('[data-testid="binding-publish"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="binding-publish"]').exists()).toBe(true);
+    expect(api.publishScreenCanvas).not.toHaveBeenCalled();
     expect(wrapper.find('[data-testid="binding-discard"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="binding-auto-preview"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="integration-readiness"]').exists()).toBe(false);

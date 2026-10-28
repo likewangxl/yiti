@@ -10,12 +10,57 @@
         <el-button v-if="hasLocalChanges" data-testid="binding-cancel" :disabled="writing || loading" @click="cancelLocalChanges">取消修改</el-button>
         <el-button data-testid="binding-preview" title="请先保存草稿再预览" :disabled="!screenReady || writing || hasLocalChanges" @click="preview">预览</el-button>
         <el-button data-testid="binding-save" type="primary" :loading="saving" :disabled="writing || !screenReady" @click="saveDraft">保存草稿</el-button>
+        <el-button data-testid="binding-publish" :loading="publishing" :disabled="!canStartPublish"
+                   :title="publishDisabledHint || '发布当前已保存草稿'" @click="openPublishDialog">发布</el-button>
       </div>
     </header>
 
+    <p v-if="!publishPermissionGranted" class="panorama-bindings__publish-permission" data-testid="publish-permission-hint" role="note">
+      当前账号没有发布大屏的权限，请联系管理员开通权限。
+    </p>
     <p v-if="error" class="panorama-bindings__error" role="alert">{{ error }}</p>
     <p v-if="conflict" class="panorama-bindings__conflict" data-testid="binding-conflict" role="alert">{{ conflict }}</p>
+    <p v-if="publishError" class="panorama-bindings__error" data-testid="binding-publish-error" role="alert">{{ publishError }}</p>
+    <div v-if="publishedResult" class="panorama-bindings__publish-success" data-testid="binding-published" role="status">
+      <span>已发布到正式大屏“{{ publishedResult.screenName }}”，正式查看者现在读取新版本。</span>
+      <el-button v-if="publishedResult.screenCode" data-testid="view-published-screen" @click="viewPublishedScreen">查看正式大屏</el-button>
+    </div>
+    <div v-if="publishRefreshWarning" class="panorama-bindings__publish-refresh-warning" data-testid="publish-refresh-warning" role="note">
+      <span>{{ publishRefreshWarning }}</span>
+      <el-button data-testid="publish-refresh" :loading="loading" :disabled="loading || publishing" @click="loadCanvas(activeScreenId, { preservePublishState: true })">重新读取配置</el-button>
+    </div>
     <p v-if="loading" class="panorama-bindings__loading" role="status">正在读取服务端屏配置…</p>
+
+    <el-dialog v-model="publishDialogOpen" class="panorama-bindings__publish-dialog"
+               title="确认发布大屏" data-testid="publish-confirmation-dialog"
+               :close-on-click-modal="false" :close-on-press-escape="!publishing"
+               :show-close="!publishing" :before-close="beforePublishDialogClose"
+               @close="handlePublishDialogClose">
+      <template #header>
+        <h2 id="publish-confirmation-title">确认发布大屏</h2>
+      </template>
+        <p>将“{{ activeScreenName }}”当前已保存的草稿正式发布。发布成功后正式生效，这张大屏的运行内容立即更新，具备查看权限的用户会看到新版本。</p>
+        <p class="panorama-bindings__publish-version">屏幕编码：{{ activeScreen?.screenCode || activeScreen?.screen_code || '未提供' }}</p>
+        <p class="panorama-bindings__publish-version">本次发布使用当前保存版本：{{ canvas?.canvasVersion }}</p>
+        <label class="panorama-bindings__field-label" for="publish-reason">发布原因（必填）</label>
+        <textarea id="publish-reason" v-model="publishReason" data-testid="publish-reason" rows="3"
+                  placeholder="说明本次发布原因" :disabled="publishing"></textarea>
+        <p v-if="!publishReason.trim()" class="panorama-bindings__hint" data-testid="publish-reason-hint" role="note">请填写非空的发布原因。</p>
+        <label class="panorama-bindings__publish-confirmation" data-testid="publish-confirmation">
+          <input v-model="publishConfirmed" type="checkbox" :disabled="publishing" />
+          我确认将“{{ activeScreenName }}”正式发布，正式查看者将看到当前已保存版本。
+        </label>
+        <p v-if="publishDialogError" class="panorama-bindings__error" role="alert">{{ publishDialogError }}</p>
+      <template #footer>
+        <div class="panorama-bindings__publish-dialog-actions">
+          <el-button data-testid="publish-cancel" :disabled="publishing" @click="cancelPublishDialog">取消</el-button>
+          <el-button data-testid="publish-confirm" type="primary" :loading="publishing"
+                     :disabled="publishing || !publishConfirmed || !publishReason.trim()" @click="confirmPublish">
+            {{ publishing ? '发布中…' : '确认发布' }}
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
 
     <section class="card-section panorama-bindings__screen-bar">
       <label for="panorama-screen-select">经营大屏</label>
@@ -271,11 +316,13 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { usePermissionStore } from '@/stores/permission';
 import {
   getScreenCanvas,
   listScreenDatasources,
   listScreenMetricCatalog,
   listScreens,
+  publishScreenCanvas,
   saveScreenCanvas,
   saveScreenDatasource
 } from '@/api/screen';
@@ -331,6 +378,8 @@ const props = defineProps({ screenId: { type: [Number, String], default: '' } })
 const emit = defineEmits(['saved', 'published', 'discarded', 'preview', 'error']);
 const route = useRoute();
 const router = useRouter();
+const permissionStore = usePermissionStore();
+const PUBLISH_RESOURCE = '/api/screen/admin/canvas/publish';
 
 const screens = ref([]);
 const activeScreenId = ref('');
@@ -349,8 +398,17 @@ const comparisonModeOverrides = reactive({});
 const bindingState = reactive({});
 const loading = ref(false);
 const saving = ref(false);
+const publishing = ref(false);
 const error = ref('');
 const conflict = ref('');
+const publishDialogOpen = ref(false);
+const publishReason = ref('');
+const publishConfirmed = ref(false);
+const publishDialogError = ref('');
+const publishError = ref('');
+const publishRefreshWarning = ref('');
+const publishedResult = ref(null);
+const publishContext = ref(null);
 const conversionAccepted = ref(false);
 const screenReady = ref(false);
 const compositionMode = ref('rows');
@@ -364,6 +422,28 @@ let disposed = false;
 const displaySession = ref(createPresentationEditorSession({}, { type: 'CODE', template: 'branch-overview-v1' }));
 
 const selectedTemplate = ref('branch-overview-v1');
+const activeScreenName = computed(() => activeScreen.value?.screenName || activeScreen.value?.screen_name
+  || activeScreen.value?.screenCode || activeScreen.value?.screen_code || `屏幕 #${activeScreenId.value}`);
+const publishPermissionGranted = computed(() => permissionStore.loaded === true
+  && typeof permissionStore.canAccess === 'function'
+  && permissionStore.canAccess(PUBLISH_RESOURCE));
+const canvasVersionValid = computed(() => Number.isSafeInteger(canvas.value?.canvasVersion)
+  && canvas.value.canvasVersion >= 0);
+const writing = computed(() => saving.value || publishing.value || publishDialogOpen.value);
+const canStartPublish = computed(() => screenReady.value && !loading.value && !saving.value && !publishing.value
+  && !publishDialogOpen.value && !hasLocalChanges.value && canvasVersionValid.value && publishPermissionGranted.value);
+const canConfirmPublish = computed(() => screenReady.value && !loading.value && !saving.value && !publishing.value
+  && !hasLocalChanges.value && canvasVersionValid.value && publishPermissionGranted.value);
+const publishDisabledHint = computed(() => {
+  if (!publishPermissionGranted.value) return '当前账号没有发布大屏的权限';
+  if (loading.value) return '正在读取大屏配置';
+  if (!screenReady.value) return '大屏配置尚未读取完成';
+  if (saving.value || publishing.value) return '当前有写操作正在进行';
+  if (publishDialogOpen.value) return '请先完成或取消发布确认';
+  if (hasLocalChanges.value) return '请先保存或取消未保存修改';
+  if (!canvasVersionValid.value) return '当前画布版本无效，请重新读取配置';
+  return '';
+});
 const isRetailTemplate = computed(() => selectedTemplate.value === 'retail-overview-v1');
 const isCorporateTemplate = computed(() => selectedTemplate.value === CORPORATE_TEMPLATE);
 const isBranchTemplate = computed(() => !isRetailTemplate.value && !isCorporateTemplate.value);
@@ -382,14 +462,18 @@ const slotOrder = computed(() => {
   return hasOptionalBinding ? [...base, ...BRANCH_OPTIONAL_SLOT_ORDER] : base;
 });
 function changeActiveScreen() {
+  if (writing.value) {
+    activeScreenId.value = String(activeScreen.value?.id || '');
+    return false;
+  }
   if (hasLocalChanges.value) {
     conflict.value = '存在未保存的组件配置，请先保存草稿或取消修改后再切换大屏。';
     activeScreenId.value = String(activeScreen.value?.id || '');
     return false;
   }
+  clearPublishState();
   return loadCanvas(activeScreenId.value);
 }
-const writing = computed(() => saving.value);
 const hasLocalChanges = computed(() => localDirty.value || Boolean(displaySession.value?.dirty));
 const templateSpec = slot => (isCorporateTemplate.value
   ? CORPORATE_BINDING_SLOTS[slot]
@@ -1353,6 +1437,21 @@ function requestedScreenId() {
   return screenIdValue(props.screenId) || screenIdValue(route?.query?.screenId);
 }
 
+function closePublishDialog() {
+  publishDialogOpen.value = false;
+  publishReason.value = '';
+  publishConfirmed.value = false;
+  publishDialogError.value = '';
+  publishContext.value = null;
+}
+
+function clearPublishState() {
+  closePublishDialog();
+  publishError.value = '';
+  publishRefreshWarning.value = '';
+  publishedResult.value = null;
+}
+
 function clearCanvasState() {
   canvas.value = null;
   canvasStyle.value = {};
@@ -1403,11 +1502,15 @@ async function loadScreens() {
   activeScreen.value = list.find(item => Number(item.id) === selected) || null;
 }
 
-async function loadCanvas(requestedId = activeScreenId.value) {
+async function loadCanvas(requestedId = activeScreenId.value, options = {}) {
+  const preservePublishState = options?.preservePublishState === true;
+  if (!preservePublishState && (publishing.value || publishDialogOpen.value)) return false;
   const id = screenIdValue(requestedId);
   if (!id) return false;
   const token = ++loadGeneration;
   activeScreen.value = screens.value.find(screen => Number(screen.id) === id) || activeScreen.value;
+  if (!preservePublishState) clearPublishState();
+  else publishRefreshWarning.value = '';
   clearCanvasState();
   activeScreenId.value = String(id);
   loading.value = true;
@@ -1453,6 +1556,10 @@ async function loadCanvas(requestedId = activeScreenId.value) {
     return true;
   } catch (loadError) {
     if (disposed || token !== loadGeneration) return false;
+    if (preservePublishState) {
+      publishRefreshWarning.value = '发布已成功，但未能刷新当前画布版本。正式大屏已经生效；请重新读取配置后再继续编辑或发布。';
+      return false;
+    }
     error.value = loadError?.message || '读取屏配置失败';
     emit('error', loadError);
     return false;
@@ -1465,6 +1572,111 @@ async function cancelLocalChanges() {
   if (!hasLocalChanges.value || writing.value || loading.value) return false;
   conflict.value = '';
   return loadCanvas(activeScreenId.value);
+}
+
+function openPublishDialog() {
+  if (!canStartPublish.value) return false;
+  publishError.value = '';
+  publishDialogError.value = '';
+  publishReason.value = '';
+  publishConfirmed.value = false;
+  publishContext.value = {
+    screenId: screenIdValue(activeScreenId.value),
+    expectedVersion: canvas.value?.canvasVersion,
+    generation: loadGeneration
+  };
+  publishDialogOpen.value = true;
+  return true;
+}
+
+function cancelPublishDialog() {
+  if (publishing.value) return false;
+  closePublishDialog();
+  return true;
+}
+
+function beforePublishDialogClose(done) {
+  if (publishing.value) return;
+  closePublishDialog();
+  done();
+}
+
+function handlePublishDialogClose() {
+  if (publishing.value) return;
+  closePublishDialog();
+}
+
+function publishIsCurrent(context) {
+  return !disposed && context?.generation === loadGeneration
+    && context?.screenId === screenIdValue(activeScreenId.value)
+    && context?.screenId === screenIdValue(canvas.value?.screenId || activeScreenId.value);
+}
+
+async function confirmPublish() {
+  if (publishing.value) return false;
+  if (!publishDialogOpen.value || !canConfirmPublish.value) {
+    publishDialogError.value = publishDisabledHint.value || '当前大屏状态已变化，请重新确认后再发布';
+    return false;
+  }
+  const reason = String(publishReason.value || '').trim();
+  if (!reason) {
+    publishDialogError.value = '请填写非空的发布原因';
+    return false;
+  }
+  if (!publishConfirmed.value) {
+    publishDialogError.value = '请确认大屏名称及正式生效影响';
+    return false;
+  }
+
+  const context = publishContext.value;
+  const screenId = screenIdValue(activeScreenId.value);
+  const expectedVersion = canvas.value?.canvasVersion;
+  if (!context || !publishIsCurrent(context) || context.screenId !== screenId
+      || context.expectedVersion !== expectedVersion || !Number.isSafeInteger(expectedVersion)
+      || expectedVersion < 0) {
+    publishError.value = '发布未开始：当前大屏或画布版本已变化，请重新读取并确认后再发布。草稿仍保留。';
+    closePublishDialog();
+    return false;
+  }
+
+  const screenName = activeScreenName.value;
+  const screenCode = String(activeScreen.value?.screenCode || activeScreen.value?.screen_code || '').trim();
+  publishing.value = true;
+  publishError.value = '';
+  publishRefreshWarning.value = '';
+  publishedResult.value = null;
+  try {
+    await publishScreenCanvas({ screenId, expectedVersion, reason });
+    if (!publishIsCurrent(context)) return false;
+
+    publishedResult.value = { screenId, screenName, screenCode };
+    closePublishDialog();
+    emit('published', { screenId, screenName, screenCode });
+    await loadCanvas(screenId, { preservePublishState: true });
+    return true;
+  } catch (publishFailure) {
+    if (!publishIsCurrent(context)) return false;
+    const status = Number(publishFailure?.response?.status || publishFailure?.status);
+    const code = String(publishFailure?.code || publishFailure?.response?.data?.code || '');
+    if (status === 403) {
+      publishError.value = '发布未完成：服务端拒绝了本次发布，请联系管理员核对发布权限。当前草稿已保留。';
+    } else if (code === 'RPT-43012') {
+      publishError.value = '发布未完成：画布版本已变化，请重新读取并核对后再发布。当前草稿已保留。';
+    } else {
+      publishError.value = `发布未完成：${publishFailure?.message || '请稍后重试'}。当前草稿已保留。`;
+    }
+    closePublishDialog();
+    return false;
+  } finally {
+    publishing.value = false;
+  }
+}
+
+function viewPublishedScreen() {
+  const screenCode = String(publishedResult.value?.screenCode || '').trim();
+  if (!screenCode || !router?.push) return false;
+  router.push({ name: 'ScreenView', params: { screenCode } });
+  return true;
 }
 
 function selectSlot(slot) {
@@ -1752,7 +1964,7 @@ function writeIsCurrent(targetId, token) {
 }
 
 async function saveDraft(options = {}) {
-  if (saving.value) return false;
+  if (writing.value) return false;
   const targetId = screenIdValue(options.targetId ?? activeScreenId.value);
   const token = options.generation ?? loadGeneration;
   if (!targetId || !writeIsCurrent(targetId, token)) return false;
@@ -1783,6 +1995,7 @@ async function saveDraft(options = {}) {
 }
 
 function preview() {
+  if (writing.value || loading.value) return false;
   if (hasLocalChanges.value) {
     error.value = '请先保存草稿再预览';
     return false;
@@ -1803,6 +2016,10 @@ function preview() {
 watch(() => props.screenId, async value => {
   const id = screenIdValue(value);
   if (id && screens.value.some(screen => Number(screen.id) === id)) {
+    if (publishing.value || publishDialogOpen.value) {
+      conflict.value = '发布确认或发布操作正在进行，完成前不能切换大屏。';
+      return;
+    }
     if (hasLocalChanges.value && !saving.value) {
       conflict.value = '外部请求切换大屏，但当前组件配置尚未保存；请先保存或取消修改。';
       return;
@@ -1818,6 +2035,10 @@ watch(() => route?.query?.screenId, async value => {
   const id = screenIdValue(value);
   if (id && screens.value.some(screen => Number(screen.id) === id)
       && String(id) !== String(activeScreenId.value)) {
+    if (publishing.value || publishDialogOpen.value) {
+      conflict.value = '发布确认或发布操作正在进行，完成前不能切换大屏。';
+      return;
+    }
     if (hasLocalChanges.value && !saving.value) {
       conflict.value = '路由请求切换大屏，但当前组件配置尚未保存；请先保存或取消修改。';
       return;
@@ -1872,6 +2093,16 @@ defineExpose({
 .panorama-bindings__error, .panorama-bindings__conflict { margin:0 0 14px; padding:10px 14px; border-radius:var(--radius-control, 4px); }
 .panorama-bindings__error { color:var(--color-danger-700, #a11a2b); background:var(--color-danger-50, #fff0f1); border:1px solid var(--color-danger-200, #ffd2d6); }
 .panorama-bindings__conflict { color:var(--color-warning-700, #8b5b00); background:var(--color-warning-50, #fff8e5); border:1px solid var(--color-warning-200, #f6df9d); }
+.panorama-bindings__publish-permission { margin:0 0 12px; color:var(--color-warning-700, #8b5b00); font-size:12px; }
+.panorama-bindings__publish-success, .panorama-bindings__publish-refresh-warning { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0 0 14px; padding:10px 14px; border-radius:var(--radius-control, 4px); font-size:13px; }
+.panorama-bindings__publish-success { color:var(--color-success-700, #16805d); background:var(--color-success-50, #edfaf5); border:1px solid var(--color-success-200, #b3ead6); }
+.panorama-bindings__publish-refresh-warning { color:var(--color-warning-700, #8b5b00); background:var(--color-warning-50, #fff8e5); border:1px solid var(--color-warning-200, #f6df9d); }
+.panorama-bindings__publish-version { color:var(--color-text-muted, #666); font-size:12px; }
+.panorama-bindings__publish-dialog textarea { display:block; width:100%; min-height:72px; box-sizing:border-box; padding:9px 10px; border:1px solid var(--color-border-strong, #c0c4cc); border-radius:var(--radius-control, 4px); background:var(--color-surface, #fff); color:var(--color-text, #303133); font:inherit; resize:vertical; }
+.panorama-bindings__publish-confirmation { display:flex; align-items:flex-start; gap:8px; margin-top:14px; color:var(--color-text-strong, #303133); font-size:13px; line-height:20px; }
+.panorama-bindings__publish-confirmation input { margin-top:3px; }
+.panorama-bindings__publish-dialog-actions { display:flex; justify-content:flex-end; gap:8px; }
+:deep(.panorama-bindings__publish-dialog.el-dialog) { width:min(560px, calc(100vw - 32px)); }
 .panorama-bindings__loading { margin:0 0 14px; color:var(--color-brand-700, #4767d8); }
 .panorama-bindings__legacy { display:flex; flex-direction:column; gap:8px; margin:0 0 14px; padding:12px 16px; color:var(--color-warning-700, #714c00); background:var(--color-warning-50, #fff8e5); border:1px solid var(--color-warning-200, #f6df9d); border-radius:var(--radius-control, 4px); font-size:13px; }
 .panorama-bindings__workbench { overflow:hidden; }

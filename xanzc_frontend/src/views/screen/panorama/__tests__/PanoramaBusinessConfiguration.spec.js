@@ -7,6 +7,10 @@ const fixture = vi.hoisted(() => ({
   binding: { dsId: 77, period: 'LATEST', fields: { value: 'old_balance' }, units: { value: 'YUAN' } }
 }));
 const api = vi.hoisted(() => ({ save: vi.fn() }));
+const { permissionStore } = vi.hoisted(() => ({ permissionStore: {
+  loaded: true, canAccess: vi.fn(() => true), load: vi.fn()
+} }));
+vi.mock('@/stores/permission', () => ({ usePermissionStore: () => permissionStore }));
 vi.mock('@/api/screen', () => ({
   listScreens: vi.fn(async () => [fixture.screen]),
   getScreenCanvas: vi.fn(async () => ({ screenId: 19, screenCode: 'SCR_BUSINESS', canvasVersion: 4,
@@ -26,7 +30,8 @@ import PanoramaBindings from '../PanoramaBindings.vue';
 import { getScreenCanvas, listScreenDatasources, listScreens } from '@/api/screen';
 
 const stubs = { PanoramaDataVerification: true, PanoramaDatasourcePicker: true,
-  'el-button': { template: '<button><slot /></button>' } };
+  'el-button': { template: '<button><slot /></button>' },
+  'el-dialog': { props: ['modelValue'], template: '<div v-if="modelValue"><slot name="header" /><slot /><slot name="footer" /></div>' } };
 async function page() {
   const wrapper = mount(PanoramaBindings, { global: { stubs, directives: { 'bp-overflow-tooltip': {} } } });
   await flushPromises();
