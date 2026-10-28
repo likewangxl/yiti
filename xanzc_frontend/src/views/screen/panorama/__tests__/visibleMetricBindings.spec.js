@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildSchemaFieldSpecs,
   buildSchemaInitialBinding,
+  detailColumnKind,
   buildDatasourceFieldOptions,
   resolveInitialCatalogAssignments,
   mergeCompatibleDatasourceRequest,
@@ -31,6 +32,48 @@ describe('schema1 可见组件绑定契约', () => {
     expect(ranking.filter(item => item.kind !== 'dimension').map(item => item.semantic))
       .toEqual(['value', 'increase', 'average']);
     expect(ranking.map(item => item.semantic)).not.toContain('change');
+  });
+
+  it('schema1 只暴露真实字段：构成不把旧 name/value 当指标，卡片兼容 string/object 副字段', () => {
+    const composition = buildSchemaFieldSpecs({
+      entry: { kind: 'DISPLAY_COMPONENT' },
+      component: { componentType: 'COMPOSITION_TABS', content: { tabs: [
+        { tabKey: 'deposit', label: '存款', corporateField: 'corp', retailField: 'retail', totalField: 'total', nameField: '机构名', valueField: '旧值', unit: 'YUAN' }
+      ] } }
+    });
+    expect(composition.map(item => item.semantic)).toEqual([
+      'tab:deposit:corporateField', 'tab:deposit:retailField', 'tab:deposit:totalField'
+    ]);
+    expect(composition.map(item => item.label)).toEqual(['存款·对公', '存款·零售', '存款·总量']);
+
+    const card = buildSchemaFieldSpecs({
+      entry: { kind: 'DISPLAY_COMPONENT' },
+      component: { componentType: 'METRIC_CARD', content: { mainField: 'value', subFields: [
+        'shown', { field: 'hidden', label: '隐藏', visible: false, unit: 'YUAN' }
+      ] }, dataRefs: [{ unit: 'YUAN' }] }
+    });
+    expect(card.map(item => item.semantic)).toEqual(['value', 'sub:shown', 'sub:hidden']);
+  });
+
+  it('明细表按真实身份字段识别维度且不暴露隐藏列', () => {
+    const specs = buildSchemaFieldSpecs({
+      entry: { kind: 'DISPLAY_COMPONENT' },
+      component: { componentType: 'DETAIL_TABLE', content: { columns: [
+        { columnKey: 'org_code', field: 'org_code', label: '机构编码', unit: 'AUTO', visible: true },
+        { columnKey: 'owner_operating_org_code', field: 'owner_operating_org_code', label: '归属机构', unit: 'AUTO', visible: true },
+        { columnKey: 'located', field: 'located', label: '定位状态', unit: 'AUTO', visible: true },
+        { columnKey: 'amount', field: 'amount', label: '金额', unit: 'YUAN', visible: true },
+        { columnKey: 'hidden_metric', field: 'hidden_metric', label: '隐藏', unit: 'YUAN', visible: false }
+      ] } }
+    });
+    expect(specs.map(item => [item.semantic, item.kind])).toEqual([
+      ['column:org_code', 'dimension'], ['column:owner_operating_org_code', 'dimension'],
+      ['column:located', 'dimension'], ['column:amount', 'metric']
+    ]);
+    expect(detailColumnKind({ columnKey: 'mystery', field: 'mystery', unit: 'AUTO' })).toBe('unknown');
+    expect(detailColumnKind({ columnKey: 'amount', field: 'amount', unit: 'AUTO' }, {
+      datasource: { sourceKind: 'WIDE_TABLE', configJson: JSON.stringify({ fieldMeta: [{ col: 'amount', role: 'METRIC', unit: 'YUAN' }] }) }
+    })).toBe('metric');
   });
 
   it('从 metrics + 目录 outputColumn 唯一回显字段和单位，不能猜非目录字段', () => {
@@ -97,6 +140,32 @@ describe('schema1 可见组件绑定契约', () => {
       binding: { fields: { corporate: '存款对公', retail: '存款零售', corporateLoan: '贷款对公', retailLoan: '贷款零售' }, units: { corporate: 'YUAN', retail: 'YUAN', corporateLoan: 'TEN_THOUSAND', retailLoan: 'TEN_THOUSAND' } }
     });
     expect(result.units).toMatchObject({ corporate: 'TEN_THOUSAND', retail: 'TEN_THOUSAND' });
+  });
+
+  it('构成页签没有旧 binding 时也使用来源单位，不把展示单位当查询单位', () => {
+    const result = buildSchemaInitialBinding({
+      entry: { kind: 'DISPLAY_COMPONENT' },
+      component: { componentType: 'COMPOSITION_TABS', dataRefs: [{ unit: 'YUAN' }], content: { tabs: [
+        { tabKey: 'deposit', corporateField: 'corp', retailField: 'retail', totalField: 'total', unit: 'HUNDRED_MILLION', nameField: '机构名', valueField: '旧值' }
+      ] } }
+    });
+    expect(result.fields).toEqual({
+      'tab:deposit:corporateField': 'corp', 'tab:deposit:retailField': 'retail', 'tab:deposit:totalField': 'total'
+    });
+    expect(result.units).toEqual({
+      'tab:deposit:corporateField': 'YUAN', 'tab:deposit:retailField': 'YUAN', 'tab:deposit:totalField': 'YUAN'
+    });
+  });
+
+  it('初始回显跳过隐藏趋势、排名和明细列', () => {
+    const result = buildSchemaInitialBinding({
+      entry: { kind: 'DISPLAY_COMPONENT' },
+      component: { componentType: 'DETAIL_TABLE', content: { columns: [
+        { columnKey: 'org_name', field: 'org_name', unit: 'AUTO', visible: true },
+        { columnKey: 'amount', field: 'amount', unit: 'YUAN', visible: false }
+      ] } }
+    });
+    expect(result.fields).toEqual({ 'column:org_name': 'org_name' });
   });
 
   it('CUSTOM_SQL 同名字段没有目录来源证据时保留手工列，不自动回填 metricCode', () => {

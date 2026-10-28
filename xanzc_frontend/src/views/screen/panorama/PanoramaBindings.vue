@@ -96,11 +96,12 @@
 
       <div class="panorama-bindings__body">
         <nav class="panorama-bindings__slots" aria-label="经营指标区域">
-          <h3>{{ hasNewDisplayPresentation ? '可见组件' : '展示内容' }}</h3>
-          <template v-if="hasNewDisplayPresentation">
+          <h3>{{ hasNewDisplayPresentation || legacyCatalogEntries.length ? '可见组件' : '展示内容' }}</h3>
+          <template v-if="hasNewDisplayPresentation || legacyCatalogEntries.length">
             <button v-for="entry in catalogEntries" :key="entry.key" type="button"
                     :class="{ 'is-active': selectedCatalogKey === entry.key }"
                     :data-config-key="entry.key"
+                    :data-testid="entry.kind === 'LEGACY_COMPONENT' ? `slot-${entry.slot}` : undefined"
                     :data-component-id="entry.sourceComponentId || undefined" @click="selectCatalogEntry(entry)">
               <span>{{ catalogDisplayLabel(entry) }}</span>
               <small>{{ catalogKindLabel(entry) }}</small>
@@ -120,23 +121,32 @@
               <small>可选·待配置</small>
             </button>
           </template>
+          <template v-if="drillCatalogEntries.length">
+            <h3>下钻页面</h3>
+            <button v-for="entry in drillCatalogEntries" :key="entry.key" type="button"
+                    :data-testid="`drill-slot-${entry.slot}`" :class="{ 'is-active': selectedCatalogKey === entry.key }"
+                    @click="selectCatalogEntry(entry)">
+              <span>{{ entry.label }}</span><small>沿用父屏数据来源</small>
+            </button>
+          </template>
         </nav>
 
         <main class="panorama-bindings__editor" aria-live="polite">
           <template v-if="selectedSpec">
             <header class="panorama-bindings__editor-head">
               <div>
-                <h2>{{ hasNewDisplayPresentation ? (catalogDisplayLabel(selectedCatalogEntry) || displayComponentLabel(selectedDisplayComponentEntry)) : selectedSpec.label }}</h2>
-                <p data-testid="binding-guidance">{{ selectedCatalogReadonly ? '系统生成指标，只读展示。' : selectedGuidance }}</p>
+                <h2>{{ hasNewDisplayPresentation || legacyCatalogEntries.length ? (catalogDisplayLabel(selectedCatalogEntry) || selectedSpec.label) : selectedSpec.label }}</h2>
+                <p data-testid="binding-guidance">{{ selectedCatalogEntry?.kind === 'INSTITUTION_MAP' ? '机构分布来自授权机构目录，经营指标沿用机构排名配置。' : selectedCatalogEntry?.derivedNotes?.length ? selectedCatalogEntry.derivedNotes.join('；') : (selectedCatalogReadonly ? '系统生成指标，只读展示。' : selectedGuidance) }}</p>
               </div>
               <span v-if="selectedBinding?.dsId && !selectedCatalogReadonly" class="panorama-bindings__bound">已选择数据来源<span v-if="autoReviewSlots.has(selectedSlot)">·待核验</span></span>
             </header>
 
             <label class="panorama-bindings__field-label" for="panorama-component-title">标题</label>
             <input id="panorama-component-title" data-testid="component-title" :value="componentTitle"
-                   placeholder="留空恢复默认标题" :disabled="writing || loading || selectedCatalogEntry?.kind === 'SYSTEM_METRIC'" @input="updateComponentTitle($event.target.value)" />
-            <p class="panorama-bindings__hint">{{ componentDefaultTitle }}；清空后恢复默认标题。</p>
+                   placeholder="留空恢复默认标题" :disabled="writing || loading || selectedComponentSourceMissing || selectedCatalogEntry?.kind === 'SYSTEM_METRIC' || selectedCatalogEntry?.titleEditable === false" @input="updateComponentTitle($event.target.value)" />
+            <p class="panorama-bindings__hint">{{ selectedCatalogEntry?.titleEditable === false ? '此组件使用页面固定标题。' : `${componentDefaultTitle}；清空后恢复默认标题。` }}</p>
             <p v-if="selectedCatalogEntry?.kind === 'INSTITUTION_MAP'" class="panorama-bindings__hint">数据来自当前授权机构目录/经营画像，仅区域标题可改。</p>
+            <p v-if="selectedComponentSourceMissing" class="panorama-bindings__error" role="alert">当前组件的来源区块缺失，已停止绑定编辑，请先核对组件与区块的对应关系。</p>
             <p v-else-if="selectedCatalogEntry?.kind === 'SYSTEM_METRIC'" class="panorama-bindings__hint">该指标由运行态系统生成，没有独立数据来源、字段或周期配置。</p>
 
             <section v-if="comparisonConfigurable" class="panorama-bindings__comparison-mode" data-testid="comparison-mode-entry">
@@ -155,7 +165,7 @@
               :slot-key="selectedSlot"
               :slot-label="selectedSpec.label"
               :template-name="selectedTemplate"
-              :field-specs="selectedFieldSpecs"
+              :field-specs="selectedFieldSpecs.filter(field => field.kind !== 'unknown')"
               :composition-mode="compositionMode"
               :screen="screenScope"
               :datasources="datasources"
@@ -259,7 +269,7 @@
             <p v-if="!selectedCatalogReadonly && !selectedDatasource" data-testid="datasource-required-hint" class="panorama-bindings__hint">请先选择数据源（数据来源），再配置展示字段和单位。</p>
             <p v-else-if="!selectedCatalogReadonly && selectedFieldSpecs.length && !hasApplicableFieldOptions" data-testid="datasource-fields-unavailable-hint" class="panorama-bindings__hint">已选择数据来源，但没有适用字段候选（展示字段），请核对字段角色或元数据。</p>
 
-            <div v-if="!hasNewDisplayPresentation || selectedCatalogEntry?.kind === 'DERIVED_TOTAL'" class="panorama-bindings__fields">
+            <div v-if="!hasNewDisplayPresentation || ['DERIVED_TOTAL', 'INHERITED_SLOT'].includes(selectedCatalogEntry?.kind)" class="panorama-bindings__fields">
               <div v-for="fieldSpec in selectedFieldSpecs" :key="fieldSpec.semantic" class="panorama-bindings__field-row">
                 <label :for="`panorama-field-${fieldSpec.semantic}`">
                   {{ fieldSpec.label }}<em v-if="fieldSpec.required">需要配置</em>
@@ -365,6 +375,7 @@ import {
 import { buildBusinessSourceCandidates } from '../presentation/sources/businessSourceCandidates';
 import { buildRuntimeComponentCatalog, resolveConfiguredMetricLabel } from '../presentation/editor/runtimeComponentCatalog';
 import { getEffectiveBusinessGrowthSeries } from '../presentation/model/businessGrowthModel';
+import { buildLegacyComponentCatalog } from './legacyComponentCatalog';
 import {
   commitSnapshot,
   createPresentationEditorSession,
@@ -383,6 +394,8 @@ const PUBLISH_RESOURCE = '/api/screen/admin/canvas/publish';
 
 const screens = ref([]);
 const activeScreenId = ref('');
+// v-model 在 change 回调前已更新，必须独立保存当前画布所属屏幕。
+const loadedScreenId = ref('');
 const activeScreen = ref(null);
 const canvas = ref(null);
 const canvasStyle = ref({});
@@ -461,14 +474,16 @@ const slotOrder = computed(() => {
   });
   return hasOptionalBinding ? [...base, ...BRANCH_OPTIONAL_SLOT_ORDER] : base;
 });
-function changeActiveScreen() {
+function changeActiveScreen(event) {
   if (writing.value) {
-    activeScreenId.value = String(activeScreen.value?.id || '');
+    activeScreenId.value = loadedScreenId.value;
+    if (event?.target) event.target.value = loadedScreenId.value;
     return false;
   }
   if (hasLocalChanges.value) {
     conflict.value = '存在未保存的组件配置，请先保存草稿或取消修改后再切换大屏。';
-    activeScreenId.value = String(activeScreen.value?.id || '');
+    activeScreenId.value = loadedScreenId.value;
+    if (event?.target) event.target.value = loadedScreenId.value;
     return false;
   }
   clearPublishState();
@@ -485,13 +500,21 @@ const selectedBinding = computed(() => {
 });
 const selectedFieldSpecs = computed(() => {
   if (!selectedSpec.value) return [];
+  if (selectedCatalogEntry.value?.kind === 'INHERITED_SLOT') {
+    return (selectedSpec.value.fields || []).filter(field => selectedCatalogEntry.value.fieldSemantics.includes(field.semantic));
+  }
+  if (!hasNewDisplayPresentation.value && selectedCatalogEntry.value?.kind === 'LEGACY_COMPONENT') {
+    const allowed = new Set(selectedCatalogEntry.value.fieldSemantics || []);
+    return (selectedSpec.value.fields || []).filter(field => allowed.has(field.semantic));
+  }
   if (hasNewDisplayPresentation.value && selectedCatalogEntry.value?.kind === 'DERIVED_TOTAL') {
     return [{ semantic: 'value', label: '当前金额', kind: 'metric', required: true,
       unitKinds: ['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION'] }];
   }
   if (hasNewDisplayPresentation.value && selectedCatalogEntry.value
       && !['DERIVED_TOTAL', 'SYSTEM_METRIC', 'INSTITUTION_MAP'].includes(selectedCatalogEntry.value.kind)) {
-    return buildSchemaFieldSpecs({ entry: selectedCatalogEntry.value, component: selectedDisplayComponent.value });
+    return buildSchemaFieldSpecs({ entry: selectedCatalogEntry.value, component: selectedDisplayComponent.value,
+      datasource: selectedDatasource.value, catalog: metricCatalog.value });
   }
   if (selectedSlot.value !== 'composition') return selectedSpec.value.fields || [];
   const semantics = compositionMode.value === 'columns'
@@ -501,6 +524,9 @@ const selectedFieldSpecs = computed(() => {
 const selectedDatasource = computed(() => datasources.value.find(item => String(item.id) === String(selectedBinding.value.dsId)) || null);
 const selectedSchemaInitialBinding = computed(() => {
   if (!hasNewDisplayPresentation.value) return { fields: {}, units: {} };
+  if (selectedCatalogEntry.value?.kind === 'INHERITED_SLOT') return {
+    fields: { ...(selectedBinding.value.fields || {}) }, units: { ...(selectedBinding.value.units || {}) }
+  };
   if (selectedCatalogEntry.value?.kind === 'DERIVED_TOTAL') {
     return {
       fields: { value: selectedBinding.value.fields?.value || '' },
@@ -535,11 +561,28 @@ const selectedInitialFilters = computed(() => selectedInitialAggregation.value?.
 const runtimeCatalog = computed(() => buildRuntimeComponentCatalog(hasNewDisplayPresentation.value
   ? { ...displaySession.value?.presentation, metricLabels: canvasStyle.value?.metricLabels }
   : canvasStyle.value));
-const catalogEntries = computed(() => runtimeCatalog.value.entries || []);
-const selectedCatalogEntry = computed(() => catalogEntries.value.find(item => item.key === selectedCatalogKey.value)
+const legacyCatalogEntries = computed(() => !hasNewDisplayPresentation.value
+  ? buildLegacyComponentCatalog(selectedTemplate.value, bindingState) : []);
+const catalogEntries = computed(() => hasNewDisplayPresentation.value
+  ? (runtimeCatalog.value.entries || []) : legacyCatalogEntries.value);
+const drillCatalogEntries = computed(() => {
+  if (!hasNewDisplayPresentation.value || !isBranchTemplate.value) return [];
+  const slots = new Set(draftComponents.value.map(item => item?.propValue?.bindingKey));
+  return [
+    { slot: 'citySummary', label: '城市经营汇总', fieldSemantics: ['orgCode', 'cityCode', 'cityName', 'deposit', 'loan', 'customers', 'revenue'] },
+    { slot: 'branchTrend', label: '支行存贷款趋势', fieldSemantics: ['date', 'deposit', 'loan'] }
+  ].filter(entry => slots.has(entry.slot)).map(entry => ({ ...entry, key: `drill-${entry.slot}`, kind: 'INHERITED_SLOT', titleEditable: false,
+    derivedNotes: ['此处配置下钻页面实际使用的数据，主页面组件保持原配置。'] }));
+});
+const selectedCatalogEntry = computed(() => [...catalogEntries.value, ...drillCatalogEntries.value].find(item => item.key === selectedCatalogKey.value)
   || catalogEntries.value[0] || null);
-const selectedCatalogReadonly = computed(() => ['SYSTEM_METRIC', 'INSTITUTION_MAP'].includes(selectedCatalogEntry.value?.kind));
+const selectedComponentSourceMissing = computed(() => hasNewDisplayPresentation.value
+  && Boolean(selectedCatalogEntry.value?.sourceComponentId)
+  && !displayComponents.value.some(entry => entry.component.componentId === selectedCatalogEntry.value.sourceComponentId));
+const selectedCatalogReadonly = computed(() => selectedComponentSourceMissing.value
+  || ['SYSTEM_METRIC', 'INSTITUTION_MAP'].includes(selectedCatalogEntry.value?.kind));
 const periodComparisonConfigurable = computed(() => {
+  if (selectedComponentSourceMissing.value) return false;
   const entry = selectedCatalogEntry.value;
   if (!entry) return false;
   if (entry.kind === 'DERIVED_TOTAL' || entry.key === 'overview-settlementDeposit') return true;
@@ -636,7 +679,8 @@ const displayComponents = computed(() => {
 const selectedDisplayComponentEntry = computed(() => displayComponents.value
   .find(entry => entry.component.componentId === selectedComponentId.value)
   || (!hasNewDisplayPresentation.value ? displayComponents.value[0] : null));
-const selectedDisplayComponent = computed(() => selectedDisplayComponentEntry.value?.component || null);
+const selectedDisplayComponent = computed(() => selectedDisplayComponentEntry.value?.component
+  || selectedCatalogEntry.value?.component || null);
 const isSchemaMetricCard = computed(() => hasNewDisplayPresentation.value
   && ['METRIC_CARD', 'COMPLETION'].includes(selectedDisplayComponent.value?.componentType));
 const selectedDisplayFieldMappings = computed(() => {
@@ -654,7 +698,13 @@ const selectedDisplayFieldMappings = computed(() => {
   }
   if (['METRIC_CARD', 'COMPLETION'].includes(component.componentType)
       && Object.prototype.hasOwnProperty.call(content, 'mainField')) {
-    return [{ key: 'mainField', kind: 'mainField', label: '展示字段', value: String(content.mainField || ''), testId: 'component-main-field' }];
+    return [{ key: 'mainField', kind: 'mainField', label: '展示字段', value: String(content.mainField || ''), testId: 'component-main-field' },
+      ...(Array.isArray(content.subFields) ? content.subFields : []).map((item, index) => {
+        const definition = typeof item === 'string' ? { field: item, label: item } : item;
+        const field = String(definition?.field || definition?.key || '');
+        return { key: `sub:${field}`, kind: 'subFields', index, label: definition?.label || field,
+          value: field, testId: `component-sub-field-${index}` };
+      }).filter(item => item.value)];
   }
   if (component.componentType === 'TREND') {
     return (Array.isArray(content.series) ? content.series : []).map((item, index) => ({
@@ -692,8 +742,8 @@ const selectedDisplayFieldMappings = computed(() => {
     return (Array.isArray(content.columns) ? content.columns : []).map((item, index) => ({
       key: `column-${item.columnKey || index}`, kind: 'columns', index,
       label: item.label || item.columnKey || `表格列 ${index + 1}`,
-      value: String(item.field || ''), testId: `component-column-field-${item.columnKey || index}`
-    }));
+      value: String(item.field || ''), visible: item.visible, testId: `component-column-field-${item.columnKey || index}`
+    })).filter(item => item.visible !== false);
   }
   return [];
 });
@@ -709,24 +759,30 @@ function componentMappingItem(mapping) {
 
 function componentFieldOptions(mapping) {
   if (!mapping) return [];
-  if (selectedCatalogEntry.value?.kind === 'INSTITUTION_RANKING' && mapping.kind === 'rankingMetrics') {
+  if (selectedDisplayComponent.value?.componentType === 'RANKING' && mapping.kind === 'rankingMetrics') {
     const binding = selectedBinding.value || {};
-    const rawByNormalized = { deposit: 'value', increase: 'increase', average: 'average', change: 'change' };
-    const labels = { deposit: '指标值', increase: '净增', average: '日均', change: '变化' };
+    const rawByNormalized = selectedSlot.value === 'ranking'
+      ? { deposit: 'value', increase: 'increase', average: 'average', change: 'change' }
+      : Object.fromEntries((selectedSpec.value?.fields || []).filter(item => item.kind === 'metric').map(item => [item.semantic, item.semantic]));
+    const labels = Object.fromEntries((selectedSpec.value?.fields || []).map(item => [item.semantic, item.label]));
     return Object.entries(rawByNormalized)
       .filter(([, semantic]) => String(binding.fields?.[semantic] || '').trim())
       .map(([field, semantic]) => ({
         col: field,
-        label: `${labels[field]}（${binding.fields[semantic]}）`,
+        label: `${labels[semantic] || field}（${binding.fields[semantic]}）`,
         role: 'METRIC',
-        unit: 'HUNDRED_MILLION',
+        unit: ['rate', 'nplRate', 'change'].includes(field) ? 'PERCENT' : 'HUNDRED_MILLION',
         normalized: true
       }));
   }
   if (!selectedDatasource.value) return [];
   const columnKey = String(componentMappingItem(mapping)?.columnKey || '');
   const dimensionColumns = new Set(['orgCode', 'orgName', 'cityCode', 'cityName', 'ownerOperatingOrgCode', 'parentOrgCode', 'coordSys', 'located', 'label']);
-  const expectedRole = mapping.kind === 'columns' && dimensionColumns.has(columnKey) ? 'DIM' : 'METRIC';
+  const mappingSemantic = mapping.kind === 'columns' ? `column:${columnKey || mapping.index}` : '';
+  const declaredKind = selectedFieldSpecs.value.find(item => item.semantic === mappingSemantic)?.kind;
+  if (declaredKind === 'unknown') return [];
+  const expectedRole = declaredKind === 'dimension'
+    || (mapping.kind === 'columns' && dimensionColumns.has(columnKey)) ? 'DIM' : 'METRIC';
   const currentUnit = String(componentMappingItem(mapping)?.unit || selectedDisplayComponent.value?.dataRefs?.[0]?.unit || '');
   const currentKind = unitKindOf(currentUnit);
   const declared = [...getDatasourceFieldOptions(selectedDatasource.value), ...buildDatasourceFieldOptions(selectedDatasource.value, metricCatalog.value)]
@@ -762,7 +818,10 @@ function fieldOptionsForBinding(slot, semantic, dsId) {
   // A date/subject dimension must not become a numeric metric, and a metric
   // must not become a trend axis. Unknown roles fail closed.
   const options = getDatasourceFieldOptions(source || {})
-    .filter(option => String(option.role || '').toUpperCase() === expectedRole);
+    .filter(option => String(option.role || '').toUpperCase() === expectedRole)
+    // 来源已声明单位时，不允许把百分比/户数当金额；未声明单位仍保留人工核对入口。
+    .filter(option => expectedRole !== 'METRIC' || !fieldSpec.unitKinds?.length || !option.unit
+      || fieldSpec.unitKinds.includes(String(option.unit).toUpperCase()));
   // NAMED_GROUP city summaries resolve identity through the authorized
   // institution directory.  Only the engine's built-in ORG_INDEX_RESULT
   // org_code dimension is safe here; a configured org_name (or a free-form
@@ -839,7 +898,7 @@ function displayComponentLabel(entry) {
 }
 
 function displayComponentTypeLabel(component = {}) {
-  return ({ METRIC_CARD: '指标卡', TREND: '趋势', RANKING: '排名', MAP: '地图', COMPOSITION_TABS: '业务构成', DETAIL_TABLE: '明细表' })[component.componentType]
+  return ({ METRIC_CARD: '指标卡', COMPLETION: '完成率', TREND: '趋势', RANKING: '排名', MAP: '地图', COMPOSITION_TABS: '业务构成', DETAIL_TABLE: '明细表' })[component.componentType]
     || component.componentType || '组件';
 }
 
@@ -851,6 +910,9 @@ function catalogKindLabel(entry = {}) {
 
 function catalogDisplayLabel(entry) {
   if (!entry) return '';
+  if (entry.kind === 'LEGACY_COMPONENT' && entry.titleEditable) {
+    return resolveConfiguredMetricLabel(canvasStyle.value, entry.slot, entry.label);
+  }
   const sourceId = String(entry.sourceComponentId || '');
   const context = sourceId.startsWith('business-retail-')
     ? '零售' : sourceId.startsWith('business-corp-') ? '对公' : '';
@@ -1037,7 +1099,7 @@ function setComponentField(mapping, value) {
       patch.series = current;
     } else {
       let current = Array.isArray(selectedDisplayComponent.value.content?.[mapping.kind])
-        ? selectedDisplayComponent.value.content[mapping.kind].map(item => ({ ...item })) : [];
+        ? selectedDisplayComponent.value.content[mapping.kind].map(item => typeof item === 'string' ? item : ({ ...item })) : [];
       let targetIndex = mapping.index;
       const desiredTabKey = mapping.kind === 'tabs'
         ? String(selectedCatalogEntry.value?.tabKey || mapping.tabKey || '') : '';
@@ -1055,7 +1117,8 @@ function setComponentField(mapping, value) {
           targetIndex = current.findIndex(item => item?.tabKey === desiredTabKey);
         }
       }
-      const item = { ...(current[targetIndex] || {}) };
+      const previous = current[targetIndex];
+      const item = typeof previous === 'string' ? { field: previous, label: previous } : { ...(previous || {}) };
       if (mapping.kind === 'tabs') item[mapping.field] = nextValue;
       else item.field = nextValue;
       if (sourceUnit && mapping.kind !== 'tabs') item.unit = sourceUnit;
@@ -1221,7 +1284,9 @@ function mergedDatasourceRequestForDisplay(plan, source) {
   if (!source && selectedBinding.value?.dsId) {
     throw new Error(`已绑定数据源 ${selectedBinding.value.dsId} 当前不可读，已停止创建替代来源`);
   }
-  if (!source || !hasNewDisplayPresentation.value || !selectedDisplayComponent.value) return plan.datasourceRequest;
+  const slotEditor = ['LEGACY_COMPONENT', 'INHERITED_SLOT'].includes(selectedCatalogEntry.value?.kind);
+  if (!source || (!slotEditor && (!hasNewDisplayPresentation.value || !selectedDisplayComponent.value))) return plan.datasourceRequest;
+  if (slotEditor && !plan.datasourceRequest) return plan.datasourceRequest;
   const currentKind = selectedCatalogEntry.value?.kind;
   if (['DERIVED_TOTAL', 'SYSTEM_METRIC', 'INSTITUTION_MAP'].includes(currentKind)) return plan.datasourceRequest;
   const request = plan.datasourceRequest || {
@@ -1274,13 +1339,18 @@ async function applyMetricBindingPlan(plan) {
       && selectedDisplayComponent.value
       && !['DERIVED_TOTAL', 'SYSTEM_METRIC', 'INSTITUTION_MAP'].includes(selectedCatalogEntry.value?.kind);
     const rankingDisplayEdit = hasNewDisplayPresentation.value
-      && selectedCatalogEntry.value?.kind === 'INSTITUTION_RANKING';
+      && selectedDisplayComponent.value?.componentType === 'RANKING';
     if (rankingDisplayEdit) {
       binding.fields = { ...(binding.fields || {}), ...(plan.binding.fields || {}) };
       binding.units = { ...(binding.units || {}), ...(plan.binding.units || {}) };
     } else if (!schemaDisplayEdit) {
-      binding.fields = { ...(plan.binding.fields || {}) };
-      binding.units = { ...(plan.binding.units || {}) };
+      // 多个展示内容可能共享底层绑定；只合并当前编辑字段，保留未编辑的历史语义。
+      binding.fields = ['LEGACY_COMPONENT', 'INHERITED_SLOT'].includes(selectedCatalogEntry.value?.kind)
+        ? { ...(binding.fields || {}), ...(plan.binding.fields || {}) }
+        : { ...(plan.binding.fields || {}) };
+      binding.units = ['LEGACY_COMPONENT', 'INHERITED_SLOT'].includes(selectedCatalogEntry.value?.kind)
+        ? { ...(binding.units || {}), ...(plan.binding.units || {}) }
+        : { ...(plan.binding.units || {}) };
     }
     manualSlots.add(selectedSlot.value);
     autoReviewSlots.delete(selectedSlot.value);
@@ -1300,6 +1370,11 @@ function syncDisplayFromPlan(plan) {
   if (!hasNewDisplayPresentation.value || !selectedDisplayComponent.value) return;
   const fields = plan.binding?.fields || {};
   const units = plan.binding?.units || {};
+  // 在修改字段名之前固定映射，避免副字段语义随首次写入改变而漏掉后续字段。
+  const mappings = selectedDisplayFieldMappings.value;
+  for (const mapping of mappings.filter(item => item.kind === 'subFields')) {
+    if (fields[mapping.key]) setComponentField(mapping, fields[mapping.key]);
+  }
   if (fields.value && isSchemaMetricCard.value) {
     const component = selectedDisplayComponent.value;
     displaySession.value = updateModelComponent(displaySession.value, component.componentId, {
@@ -1317,9 +1392,25 @@ function syncDisplayFromPlan(plan) {
       const semantic = String(mapping.field || '').replace(/Field$/, '');
       if (fields[semantic]) setComponentField(mapping, fields[semantic]);
     }
-  } else if (selectedCatalogEntry.value?.kind === 'INSTITUTION_RANKING') {
-    // rankingMetrics.field is a runtime normalized key (deposit/increase/average);
-    // raw directory columns remain in the legacy binding fields above.
+  } else if (selectedDisplayComponent.value?.componentType === 'TREND') {
+    for (const mapping of selectedDisplayFieldMappings.value.filter(item => item.kind === 'series')) {
+      if (fields[mapping.key.replace(/^series-/, '')]) setComponentField(mapping, fields[mapping.key.replace(/^series-/, '')]);
+    }
+  } else if (selectedDisplayComponent.value?.componentType === 'COMPOSITION_TABS') {
+    for (const mapping of mappings.filter(item => item.kind === 'tabs')) {
+      const semantic = `tab:${mapping.tabKey}:${mapping.field}`;
+      if (fields[semantic]) setComponentField(mapping, fields[semantic]);
+    }
+  } else if (selectedDisplayComponent.value?.componentType === 'RANKING') {
+    // 排名运行态读取适配后的字段（如 deposit），来源原列只写入 binding。
+    // 用原列覆盖 rankingMetrics.field 会让保存成功后的排名取不到数据。
+    return;
+  } else if (selectedDisplayComponent.value?.componentType === 'DETAIL_TABLE') {
+    for (const mapping of selectedDisplayFieldMappings.value.filter(item => item.kind === 'columns')) {
+      const semantic = `column:${selectedDisplayComponent.value.content?.columns?.[mapping.index]?.columnKey || mapping.index}`;
+      const field = fields[semantic] || fields[mapping.key];
+      if (field) setComponentField(mapping, field);
+    }
   }
 }
 
@@ -1539,6 +1630,7 @@ async function loadCanvas(requestedId = activeScreenId.value, options = {}) {
     if (disposed || token !== loadGeneration) return false;
     if (!resp || typeof resp !== 'object') throw new Error('服务端未返回当前屏草稿，已停止加载');
     canvas.value = resp;
+    loadedScreenId.value = String(id);
     canvasStyle.value = parse(resp.canvasStyleJson, {});
     selectedTemplate.value = canvasStyle.value?.presentation?.template
       || (isCorporateScreen.value ? CORPORATE_TEMPLATE : isRetailScreen.value ? 'retail-overview-v1' : 'branch-overview-v1');

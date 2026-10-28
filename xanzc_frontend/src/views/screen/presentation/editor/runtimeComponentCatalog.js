@@ -153,7 +153,8 @@ export function buildRuntimeComponentCatalog(source) {
   }
   const supported = new Set(['METRIC_CARD', 'COMPLETION', 'TREND', 'COMPOSITION_TABS', 'RANKING', 'MAP', 'DETAIL_TABLE']);
   const entries = components.filter(component => component?.visible !== false && supported.has(component?.componentType))
-    .map(component => componentEntry(component));
+    .map(component => ({ ...componentEntry(component),
+      ...(component.componentType === 'MAP' ? { kind: 'INSTITUTION_MAP' } : {}) }));
   return { mode: 'DISPLAY_COMPONENTS', template: presentation.template || '', entries, groups: [] };
 }
 

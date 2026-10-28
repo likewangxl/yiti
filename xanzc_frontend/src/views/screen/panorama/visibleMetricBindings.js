@@ -2,6 +2,14 @@ const AMOUNT_UNITS = Object.freeze(['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION']);
 const RATIO_UNITS = Object.freeze(['PERCENT', 'RATIO']);
 const COUNT_UNITS = Object.freeze(['COUNT', 'TEN_THOUSAND_COUNT']);
 const ALL_METRIC_UNITS = Object.freeze([...AMOUNT_UNITS, ...RATIO_UNITS, ...COUNT_UNITS]);
+// DETAIL_TABLE 的身份列来自展示契约和旧结构迁移清单；它们没有可校验的数值单位。
+const DIMENSION_COLUMN_KEYS = new Set([
+  'orgCode', 'org_code', 'orgName', 'org_name', 'name', 'label',
+  'cityCode', 'city_code', 'cityName', 'city_name',
+  'ownerOperatingOrgCode', 'owner_operating_org_code',
+  'parentOrgCode', 'parent_org_code', 'lng', 'lat', 'coordSys', 'coord_sys', 'located',
+  'date', 'dataDate', 'data_date', 'period', 'month', 'statDate', 'stat_date'
+]);
 
 function text(value) {
   return value === null || value === undefined ? '' : String(value).trim();
@@ -104,8 +112,23 @@ function metricField(semantic, label, unit, required = true) {
   return { semantic, label, kind: 'metric', required, unitKinds: unitsFor(unit) };
 }
 
+const COMPOSITION_FIELD_LABELS = Object.freeze({ corporateField: '对公', retailField: '零售', totalField: '总量' });
+
+/** 依据真实来源 role 判定明细列；无来源证据时仅对已知身份列给出确定结论。 */
+export function detailColumnKind(column, { datasource, catalog = [] } = {}) {
+  const key = text(column?.columnKey);
+  const field = text(column?.field);
+  const options = buildDatasourceFieldOptions(datasource, catalog)
+    .filter(item => text(item?.col) === key || text(item?.col) === field);
+  const roles = new Set(options.map(item => upper(item?.role)).filter(Boolean));
+  if (roles.size === 1) return roles.has('DIM') ? 'dimension' : roles.has('METRIC') ? 'metric' : 'unknown';
+  if (DIMENSION_COLUMN_KEYS.has(key) || DIMENSION_COLUMN_KEYS.has(field)) return 'dimension';
+  if (upper(column?.unit) === 'AUTO') return 'unknown';
+  return 'metric';
+}
+
 /** 根据 schema1 当前可见组件建立表单字段，避免沿用 template slot 的通用字段。 */
-export function buildSchemaFieldSpecs({ entry, component } = {}) {
+export function buildSchemaFieldSpecs({ entry, component, datasource, catalog = [] } = {}) {
   const kind = text(entry?.kind);
   const type = upper(component?.componentType);
   if (kind === 'BUSINESS_GROWTH') {
@@ -144,9 +167,10 @@ export function buildSchemaFieldSpecs({ entry, component } = {}) {
   if (type === 'METRIC_CARD' || type === 'COMPLETION') {
     const specs = [metricField('value', '当前指标', componentUnit(component))];
     for (const item of Array.isArray(component?.content?.subFields) ? component.content.subFields : []) {
-      const field = text(item?.field || item?.key);
+      const definition = typeof item === 'string' ? { field: item, label: item } : (object(item) ? item : {});
+      const field = text(definition.field || definition.key);
       if (!field) continue;
-      specs.push(metricField(`sub:${field}`, text(item?.label) || field, item?.unit || componentUnit(component), false));
+      specs.push(metricField(`sub:${field}`, text(definition.label) || field, definition.unit || componentUnit(component), false));
     }
     return specs;
   }
@@ -162,19 +186,18 @@ export function buildSchemaFieldSpecs({ entry, component } = {}) {
   if (type === 'COMPOSITION_TABS') {
     const specs = [];
     for (const tab of Array.isArray(component?.content?.tabs) ? component.content.tabs : []) {
-      for (const field of ['corporateField', 'retailField', 'totalField', 'nameField', 'valueField']) {
+      for (const field of ['corporateField', 'retailField', 'totalField']) {
         if (!Object.prototype.hasOwnProperty.call(tab, field) || !text(tab[field])) continue;
-        const kind = field.endsWith('Field') && ['nameField', 'valueField'].includes(field) ? 'metric' : 'metric';
-        specs.push(metricField(`tab:${text(tab.tabKey)}:${field}`, `${text(tab.label) || text(tab.tabKey) || '构成'}·${field.replace('Field', '')}`, tab.unit, false));
+        specs.push(metricField(`tab:${text(tab.tabKey)}:${field}`, `${text(tab.label) || text(tab.tabKey) || '构成'}·${COMPOSITION_FIELD_LABELS[field]}`, tab.unit, false));
       }
     }
     return specs;
   }
   if (type === 'DETAIL_TABLE') {
     return (Array.isArray(component?.content?.columns) ? component.content.columns : [])
-      .filter(item => text(item?.field))
+      .filter(item => item?.visible !== false && text(item?.field))
       .map(item => ({ semantic: `column:${text(item.columnKey) || text(item.field)}`, label: text(item.label) || text(item.field),
-        kind: ['orgCode', 'orgName', 'cityCode', 'cityName'].includes(text(item.columnKey)) ? 'dimension' : 'metric',
+        kind: detailColumnKind(item, { datasource, catalog }),
         required: false, unitKinds: unitsFor(item.unit) }));
   }
   return [];
@@ -261,6 +284,12 @@ export function buildSchemaInitialBinding({ entry, component, binding = {} } = {
     if (text(field)) fields[semantic] = text(field);
     if (text(unit)) units[semantic] = upper(unit);
   };
+  const sourceUnitFor = (field, semantic, fallback = '') => {
+    if (text(binding.units?.[semantic])) return binding.units[semantic];
+    if (text(binding.units?.[field])) return binding.units[field];
+    const savedSemantic = Object.keys(binding.fields || {}).find(key => text(binding.fields[key]) === text(field));
+    return savedSemantic ? binding.units?.[savedSemantic] : fallback;
+  };
   if (kind === 'BUSINESS_GROWTH') {
     const series = Array.isArray(entry?.effectiveSeries) ? entry.effectiveSeries
       : Array.isArray(component?.content?.series) ? component.content.series : [];
@@ -287,7 +316,8 @@ export function buildSchemaInitialBinding({ entry, component, binding = {} } = {
     for (const item of metrics) {
       const semantic = text(item.metricKey) || 'value';
       const sourceSemantic = semantic === 'value' ? 'value' : semantic;
-      put(sourceSemantic, binding.fields?.[sourceSemantic] || item.field, binding.units?.[sourceSemantic] || item.unit);
+      put(sourceSemantic, binding.fields?.[sourceSemantic] || item.field,
+        sourceUnitFor(binding.fields?.[sourceSemantic] || item.field, sourceSemantic, componentUnit(component)));
     }
     if (binding.fields?.orgCode) put('orgCode', binding.fields.orgCode, binding.units?.orgCode);
     if (binding.fields?.name) put('name', binding.fields.name, binding.units?.name);
@@ -296,27 +326,38 @@ export function buildSchemaInitialBinding({ entry, component, binding = {} } = {
   if (type === 'METRIC_CARD' || type === 'COMPLETION') {
     put('value', component?.content?.mainField, componentUnit(component));
     for (const item of Array.isArray(component?.content?.subFields) ? component.content.subFields : []) {
-      const field = text(item?.field || item?.key);
-      if (field) put(`sub:${field}`, field, item?.unit || componentUnit(component));
+      const definition = typeof item === 'string' ? { field: item } : (object(item) ? item : {});
+      const field = text(definition.field || definition.key);
+      if (field) put(`sub:${field}`, field, definition.unit || componentUnit(component));
     }
     return { fields, units };
   }
   if (type === 'TREND') {
     for (const item of Array.isArray(component?.content?.series) ? component.content.series : []) {
-      put(item.seriesKey || item.field, item.field, item.unit);
+      const semantic = item.seriesKey || item.field;
+      put(semantic, item.field, sourceUnitFor(item.field, semantic, item.unit));
     }
     if (binding.fields?.date) put('date', binding.fields.date, binding.units?.date);
   }
   if (type === 'COMPOSITION_TABS') {
     for (const tab of Array.isArray(component?.content?.tabs) ? component.content.tabs : []) {
-      for (const field of ['corporateField', 'retailField', 'totalField', 'nameField', 'valueField']) {
-        if (text(tab[field])) put(`tab:${text(tab.tabKey)}:${field}`, tab[field], tab.unit);
+      for (const field of ['corporateField', 'retailField', 'totalField']) {
+        if (text(tab[field])) {
+          const semantic = `tab:${text(tab.tabKey)}:${field}`;
+          const unit = sourceUnitFor(tab[field], semantic, componentUnit(component));
+          put(semantic, tab[field], unit);
+        }
       }
     }
   }
   if (type === 'DETAIL_TABLE') {
     for (const column of Array.isArray(component?.content?.columns) ? component.content.columns : []) {
-      if (text(column?.field)) put(`column:${text(column.columnKey) || text(column.field)}`, column.field, column.unit);
+      if (column?.visible === false) continue;
+      if (text(column?.field)) {
+        const semantic = `column:${text(column.columnKey) || text(column.field)}`;
+        const isDimension = detailColumnKind(column) === 'dimension';
+        put(semantic, column.field, isDimension ? '' : sourceUnitFor(column.field, semantic, column.unit));
+      }
     }
   }
   return { fields, units };
