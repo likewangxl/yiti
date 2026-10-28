@@ -1330,7 +1330,14 @@ const declaredPeriods = computed(() => {
     // 缺省的历史配置保持原周期行为；这只保留兼容，不认证历史数据覆盖。
     return [...PERIOD_VALUES];
   }
-  const periods = parse(source.timeParamJson, []);
+  let periods;
+  try {
+    periods = typeof source.timeParamJson === 'string'
+      ? JSON.parse(source.timeParamJson)
+      : source.timeParamJson;
+  } catch {
+    periods = [];
+  }
   return Array.isArray(periods) ? periods.filter(period => PERIOD_VALUES.includes(period)) : [];
 });
 const periodUnsupported = computed(() => Boolean(selectedDatasource.value)
