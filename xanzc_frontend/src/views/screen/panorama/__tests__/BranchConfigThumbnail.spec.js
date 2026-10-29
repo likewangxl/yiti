@@ -4,6 +4,15 @@ vi.mock('../BranchThumbnailChart.vue', () => ({ default: { props: ['kind'], temp
 import { mount } from '@vue/test-utils';
 import BranchConfigThumbnail from '../BranchConfigThumbnail.vue';
 
+const allEntries = [
+  ['overview-deposit', '存款总额', 'DERIVED_TOTAL'], ['overview-deposit-composition', '存款业务分布', 'COMPOSITION_TAB'],
+  ['overview-loan', '贷款总额', 'DERIVED_TOTAL'], ['overview-loan-composition', '贷款业务分布', 'COMPOSITION_TAB'], ['overview-settlementDeposit', '结算性存款', 'SYSTEM_METRIC'],
+  ...['retail-deposit', 'retail-deposit-rate', 'retail-loan', 'retail-loan-rate'].map((key) => [`business-${key}`, key, key.endsWith('rate') ? 'COMPLETION' : 'DISPLAY_COMPONENT']),
+  ...['corp-deposit', 'corp-deposit-rate', 'corp-loan', 'corp-loan-rate'].map((key) => [`business-${key}`, key, key.endsWith('rate') ? 'COMPLETION' : 'DISPLAY_COMPONENT']),
+  ['business-revenue-operating', '营业收入', 'DISPLAY_COMPONENT'], ['business-revenue-fee', '中间业务收入', 'DISPLAY_COMPONENT'],
+  ['business-growth', '业务增长曲线', 'BUSINESS_GROWTH'], ['institution-map', '经营机构分布', 'INSTITUTION_MAP'], ['institution-ranking', '机构排名', 'INSTITUTION_RANKING']
+].map(([key, label, kind]) => ({ key, label, kind, sourceComponentId: key }));
+
 const entries = [
   { key: 'overview-deposit', label: '存款总额', kind: 'DERIVED_TOTAL' },
   { key: 'business-retail-deposit-balance', label: '存款余额', kind: 'DISPLAY_COMPONENT', sourceComponentId: 'business-retail-deposit-balance' },
@@ -50,5 +59,15 @@ describe('BranchConfigThumbnail', () => {
     expect(selected.attributes('aria-pressed')).toBe('true');
     expect(selected.attributes('disabled')).toBeDefined();
     expect(wrapper.findAll('.is-active')).toHaveLength(1);
+  });
+
+  it('18项真实目录全部落在独立交互区域，且每项都有完整标题与占位层', () => {
+    const wrapper = mount(BranchConfigThumbnail, { props: { entries: allEntries, selectedKey: 'institution-ranking' } });
+    const tiles = wrapper.findAll('[data-config-key]');
+    expect(tiles).toHaveLength(18);
+    expect(new Set(tiles.map(tile => tile.attributes('data-config-key'))).size).toBe(18);
+    expect(wrapper.findAll('[data-full-title]').length).toBe(18);
+    expect(tiles.every(tile => tile.element.tagName === 'BUTTON')).toBe(true);
+    expect(wrapper.text()).toContain('数据仅占位');
   });
 });

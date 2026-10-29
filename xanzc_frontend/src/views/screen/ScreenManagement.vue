@@ -26,4 +26,7 @@ const activeTab = ref(route.query?.tab === 'personal' ? 'personal' : 'business')
 .screen-management__tabs button { padding: 10px 20px; border: 1px solid #d3dfed; border-radius: 8px; color: #40536c; background: #fff; cursor: pointer; font: inherit; }
 .screen-management__tabs button[aria-pressed="true"] { border-color: #2d65c8; background: #eaf2ff; color: #2458b3; font-weight: 600; }
 .screen-management__tabs button:focus-visible { outline: 2px solid #2d65c8; outline-offset: 3px; }
+.screen-management:has(.panorama-bindings--visual) .screen-management__tabs { padding:8px 20px 0; gap:16px; }
+.screen-management:has(.panorama-bindings--visual) .screen-management__tabs button { padding:5px 0; border:0; border-bottom:2px solid transparent; border-radius:0; background:transparent; font-size:13px; line-height:20px; }
+.screen-management:has(.panorama-bindings--visual) .screen-management__tabs button[aria-pressed="true"] { border-bottom-color:#2d63dc; color:#2d63dc; }
 </style>

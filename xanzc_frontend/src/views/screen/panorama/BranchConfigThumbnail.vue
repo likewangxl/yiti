@@ -4,7 +4,7 @@
     <div class="branch-config-thumbnail__screen" aria-label="分行经营总览页面缩略图">
       <h3 class="branch-config-thumbnail__screen-title">{{ screenTitle }}</h3>
       <div class="branch-config-thumbnail__top-row">
-        <BranchThumbnailTile v-for="entry in overviewEntries" :key="entry.key" :entry="entry" :selected="selectedKey === entry.key" :disabled="disabled" @select="select" />
+        <BranchThumbnailTile v-for="entry in overviewEntries" :key="entry.key" :entry="entry" variant="overview" :selected="selectedKey === entry.key" :disabled="disabled" @select="select" />
       </div>
       <div class="branch-config-thumbnail__business" data-layout="2-2-1">
         <section v-for="group in businessGroups" :key="group.key" class="branch-config-thumbnail__group" :class="`branch-config-thumbnail__group--${group.key}`" :data-columns="group.key === 'revenue' ? '1' : '2'">
@@ -15,7 +15,7 @@
         </section>
       </div>
       <div class="branch-config-thumbnail__analysis">
-        <BranchThumbnailTile v-for="entry in analysisEntries" :key="entry.key" :entry="entry" analysis :selected="selectedKey === entry.key" :disabled="disabled" @select="select" />
+        <BranchThumbnailTile v-for="entry in analysisEntries" :key="entry.key" :entry="entry" variant="analysis" :selected="selectedKey === entry.key" :disabled="disabled" @select="select" />
       </div>
       <div v-if="extraEntries.length" class="branch-config-thumbnail__extras">
         <BranchThumbnailTile v-for="entry in extraEntries" :key="entry.key" :entry="entry" :selected="selectedKey === entry.key" :disabled="disabled" @select="select" />
@@ -56,15 +56,18 @@ function select(entry) { if (!props.disabled) emit('select', entry); }
 .branch-config-thumbnail { min-width:0; padding:20px; background:#fff; border:1px solid #e1e9f4; border-radius:6px; }
 .branch-config-thumbnail header h2 { margin:0; color:#172339; font-size:21px; line-height:28px; font-weight:700; }
 .branch-config-thumbnail header p { margin:8px 0 20px; color:#7c8ba4; font-size:14px; line-height:20px; }
-.branch-config-thumbnail__screen { padding:12px; border:1px solid #174a7b; border-radius:5px; color:#e8f7ff; background:#061a37 url('@/assets/panorama/panorama-background.png') center/cover; }
-.branch-config-thumbnail__screen-title { margin:0 0 12px; padding:8px 0 15px; border-bottom:1px solid #1d557a; color:#f4faff; font-size:21px; font-weight:700; text-align:center; letter-spacing:2px; line-height:28px; }
+.branch-config-thumbnail__screen { min-height:560px; padding:12px; border:1px solid #174a7b; border-radius:5px; color:#e8f7ff; background:linear-gradient(145deg,#03132b,#071c3d 58%,#03152f); box-shadow:inset 0 0 0 1px rgba(40,205,255,.1),0 8px 20px rgba(3,19,48,.25); }
+.branch-config-thumbnail__screen-title { position:relative; margin:0 0 10px; padding:4px 0 10px; border-bottom:1px solid #1d557a; color:#f4faff; font-size:21px; font-weight:700; text-align:center; letter-spacing:2px; line-height:28px; text-shadow:0 0 14px #3182c355; background:linear-gradient(90deg,transparent,#17407145,transparent); }
+.branch-config-thumbnail__screen-title::after { content:''; display:block; position:absolute; bottom:-2px; left:calc(50% - 45px); width:90px; height:3px; background:#269cdd; box-shadow:0 0 12px #1ecafa66; }
 .branch-config-thumbnail__top-row { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:7px; }
-.branch-config-thumbnail__business { display:grid; grid-template-columns:2fr 2fr 1.1fr; gap:8px; margin-top:10px; }
-.branch-config-thumbnail__group { min-width:0; padding:8px; border:1px solid #20456e; border-radius:4px; background:#091e3e; }
-.branch-config-thumbnail__group h4 { margin:0 0 8px; color:#c7e9fc; font-size:13px; font-weight:600; }
+.branch-config-thumbnail__business { display:grid; grid-template-columns:2fr 2fr 1.25fr; gap:8px; margin-top:10px; }
+.branch-config-thumbnail__group--revenue :deep(.branch-thumbnail-tile__header) { gap:5px; }
+.branch-config-thumbnail__group--revenue :deep(.branch-thumbnail-tile__icon-base) { width:24px; height:24px; }
+.branch-config-thumbnail__group { min-width:0; padding:7px; border:1px solid #20456e; border-radius:4px; background:linear-gradient(150deg,#0d254c,#071a37); }
+.branch-config-thumbnail__group h4 { margin:-7px -7px 7px; padding:7px 8px; border-bottom:1px solid #284d7255; color:#dfedff; font-size:13px; font-weight:600; line-height:17px; }
 .branch-config-thumbnail__group-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; }
 .branch-config-thumbnail__group--revenue .branch-config-thumbnail__group-grid { grid-template-columns:1fr; }
-.branch-config-thumbnail__analysis { display:grid; grid-template-columns:1.1fr 1.2fr 1fr; gap:8px; margin-top:10px; }
+.branch-config-thumbnail__analysis { display:grid; grid-template-columns:1fr 1.3fr 1fr; gap:8px; margin-top:10px; }
 .branch-config-thumbnail__extras { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-top:10px; }
 .branch-config-thumbnail__caption { display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-top:16px; color:#8190a7; font-size:12px; line-height:18px; }
 .branch-config-thumbnail__caption span:last-child { color:#2d63dc; }

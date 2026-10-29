@@ -780,11 +780,20 @@ function unitLabel(unit) {
 .metric-binding__workbench-filters { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
 .metric-binding--workbench .metric-binding__period { grid-template-columns:minmax(90px,.9fr) minmax(0,1.4fr) minmax(90px,.7fr); gap:10px; }
 .metric-binding--workbench .metric-binding__actions { flex-wrap:wrap; margin-top:14px; }
+.metric-binding--workbench .metric-binding__periods { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:15px; }
+.metric-binding--workbench .metric-binding__periods > h4,
+.metric-binding--workbench .metric-binding__periods > p { grid-column:1/-1; }
+.metric-binding--workbench .metric-binding__period { display:flex; flex-direction:column; gap:5px; min-width:0; padding:10px; background:#f8faff; border:1px solid #e3eaf4; border-radius:4px; }
+.metric-binding--workbench .metric-binding__period :deep(.el-form-item) { margin-bottom:0; }
+.metric-binding--workbench .metric-binding__table td { padding:7px 10px; }
+.metric-binding--workbench .metric-binding__table :deep(.el-select__wrapper) { min-height:34px; }
+.metric-binding--workbench .metric-binding__period :deep(.el-form-item__label) { font-size:12px; margin-bottom:5px; }
 @container (max-width:430px) {
   .metric-binding__table th, .metric-binding__table td { padding:8px 5px; font-size:12px; }
   .metric-binding__table th:first-child { width:21%; }
   .metric-binding__table th:last-child { width:28%; }
   .metric-binding--workbench .metric-binding__period, .metric-binding__workbench-filters { grid-template-columns:1fr; }
+  .metric-binding--workbench .metric-binding__periods { grid-template-columns:1fr; }
 }
 .metric-binding { container-type: inline-size; --metric-control-width: 168px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--color-border, #ebeef5); }
 .metric-binding__head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 8px; }

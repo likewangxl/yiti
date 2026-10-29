@@ -73,6 +73,7 @@
       <span v-if="activeScreen" class="panorama-bindings__screen-meta">
         {{ activeScreen.screenCode || activeScreen.screen_code }} · {{ activeScreen.bizLine || activeScreen.biz_line || 'COMMON' }}
       </span>
+      <span v-if="branchThumbnailWorkbench && canvasStyle.dataClassification === 'TEST'" class="panorama-bindings__inline-notice" data-testid="business-test-notice" role="note">当前为测试大屏，来源不代表正式经营数据。</span>
     </section>
 
     <div v-if="legacyComponents.length" class="panorama-bindings__legacy" data-testid="legacy-conversion-warning">
@@ -85,7 +86,7 @@
     </div>
 
     <section v-if="screenReady" class="card-section panorama-bindings__workbench" aria-label="大屏组件配置">
-      <p v-if="canvasStyle.dataClassification === 'TEST'" data-testid="business-test-notice" class="panorama-bindings__hint" role="note">当前大屏为联调测试模式，测试来源不代表正式经营数据。正式展示需要接入并核对业务来源。</p>
+      <p v-if="!branchThumbnailWorkbench && canvasStyle.dataClassification === 'TEST'" data-testid="business-test-notice" class="panorama-bindings__hint" role="note">当前大屏为联调测试模式，测试来源不代表正式经营数据。正式展示需要接入并核对业务来源。</p>
       <div v-if="!branchThumbnailWorkbench" class="panorama-bindings__section-head">
         <div>
           <h2>组件配置</h2>
@@ -2274,15 +2275,17 @@ defineExpose({
 .panorama-bindings__field-row em { margin-left:5px; color:var(--color-danger-700, #b42318); font-size:11px; font-style:normal; }
 .panorama-bindings__unit-hint { grid-column:2 / 4; color:var(--color-text-muted, #909399); font-size:11px; }
 .panorama-bindings__footer { display:flex; justify-content:flex-end; margin-top:14px; color:var(--color-text-muted, #909399); font-size:12px; }
-.panorama-bindings--visual { gap:16px; color:#27344b; font-size:14px; --el-color-primary:#2d63dc; --el-color-primary-light-3:#7097e9; --el-color-primary-light-9:#edf3ff; }
-.panorama-bindings--visual .panorama-bindings__header { margin:0; align-items:center; min-height:64px; }
+.panorama-bindings--visual { gap:12px; padding-top:12px; color:#27344b; font-size:14px; --el-color-primary:#2d63dc; --el-color-primary-light-3:#7097e9; --el-color-primary-light-9:#edf3ff; }
+.panorama-bindings--visual .panorama-bindings__header { margin:0; align-items:center; min-height:58px; }
 .panorama-bindings--visual .panorama-bindings__header h1 { font-size:28px; line-height:1.4; font-weight:700; color:#172339; }
 .panorama-bindings--visual .panorama-bindings__header p { font-size:14px; color:#718099; line-height:22px; }
 .panorama-bindings--visual .panorama-bindings__eyebrow { display:none; }
 .panorama-bindings--visual .panorama-bindings__actions :deep(.el-button) { height:40px; padding:0 24px; margin-left:0; font-size:14px; border-radius:4px; }
 .panorama-bindings--visual .panorama-bindings__actions :deep(.el-button--primary) { background:#2d63dc; border-color:#2d63dc; }
-.panorama-bindings--visual .panorama-bindings__screen-bar { min-height:68px; padding:16px 20px; margin:0; border-color:#e1e9f4; box-shadow:none; }
+.panorama-bindings--visual .panorama-bindings__screen-bar { min-height:62px; padding:12px 20px; margin:0; border-color:#e1e9f4; box-shadow:none; }
 .panorama-bindings--visual .panorama-bindings__screen-bar label { font-weight:600; }
+.panorama-bindings--visual .panorama-bindings__screen-bar { flex-wrap:wrap; }
+.panorama-bindings__inline-notice { margin-left:auto; color:#8a7b58; font-size:12px; line-height:18px; }
 .panorama-bindings--visual .panorama-bindings__screen-bar select { font-size:14px; height:38px; border-color:#dbe4f0; }
 .panorama-bindings--visual .panorama-bindings__workbench { padding:0; background:transparent; border:0; box-shadow:none; overflow:visible; }
 .panorama-bindings--visual .panorama-bindings__workbench > [data-testid="business-test-notice"] { padding:0 2px; margin:0 0 12px; color:#78879c; }
@@ -2290,10 +2293,10 @@ defineExpose({
 .panorama-bindings__preview-column { min-width:0; position:sticky; top:16px; }
 .panorama-bindings--visual .panorama-bindings__editor { padding:20px; border:1px solid #e1e9f4; border-radius:6px; background:#fff; min-height:650px; }
 .panorama-bindings__configuration-heading { margin:0 0 12px; color:#172339; font-size:21px; line-height:28px; font-weight:700; }
-.panorama-bindings--visual .panorama-bindings__editor-head { padding-bottom:15px; border-bottom:1px solid #e9eef6; }
+.panorama-bindings--visual .panorama-bindings__editor-head { padding-bottom:12px; border-bottom:1px solid #e9eef6; }
 .panorama-bindings--visual .panorama-bindings__editor-head h2 { margin:0 0 5px; font-size:15px; line-height:22px; color:#2d63dc; }
 .panorama-bindings__current-label { color:#7b8aa4; font-weight:400; }
-.panorama-bindings__subheading { margin:18px 0 8px; font-size:17px; font-weight:600; color:#27344b; }
+.panorama-bindings__subheading { margin:14px 0 6px; font-size:17px; font-weight:600; color:#27344b; }
 .panorama-bindings--visual .panorama-bindings__field-label { color:#3d4960; font-size:14px; font-weight:500; margin:12px 0 8px; }
 .panorama-bindings--visual .panorama-bindings__editor > input, .panorama-bindings--visual .panorama-bindings__editor > select { height:39px; border-color:#dbe4f0; color:#37465d; font:inherit; }
 .panorama-bindings--visual .panorama-bindings__editor input:focus-visible, .panorama-bindings--visual .panorama-bindings__editor select:focus-visible { outline:2px solid #82a7f0; outline-offset:1px; }
