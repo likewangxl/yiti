@@ -1,10 +1,10 @@
 <template>
-  <main v-bp-overflow-tooltip class="panorama-bindings bp-crud" aria-labelledby="panorama-bindings-title">
+  <main v-bp-overflow-tooltip class="panorama-bindings bp-crud" :class="{ 'panorama-bindings--visual': branchThumbnailWorkbench }" aria-labelledby="panorama-bindings-title">
     <header class="page-h panorama-bindings__header">
       <div>
         <span class="panorama-bindings__eyebrow">大屏管理</span>
         <h1 id="panorama-bindings-title">大屏组件配置</h1>
-        <p>选择大屏和组件，配置标题、数据来源及展示字段后保存草稿。</p>
+        <p>{{ branchThumbnailWorkbench ? '在缩略图中选择组件，配置标题、数据来源及展示字段后保存草稿。' : '选择大屏和组件，配置标题、数据来源及展示字段后保存草稿。' }}</p>
       </div>
       <div class="panorama-bindings__actions">
         <el-button v-if="hasLocalChanges" data-testid="binding-cancel" :disabled="writing || loading" @click="cancelLocalChanges">取消修改</el-button>
@@ -86,7 +86,7 @@
 
     <section v-if="screenReady" class="card-section panorama-bindings__workbench" aria-label="大屏组件配置">
       <p v-if="canvasStyle.dataClassification === 'TEST'" data-testid="business-test-notice" class="panorama-bindings__hint" role="note">当前大屏为联调测试模式，测试来源不代表正式经营数据。正式展示需要接入并核对业务来源。</p>
-      <div class="panorama-bindings__section-head">
+      <div v-if="!branchThumbnailWorkbench" class="panorama-bindings__section-head">
         <div>
           <h2>组件配置</h2>
           <p>左侧选择已存在的展示内容，右侧修改标题和数据绑定。</p>
@@ -94,8 +94,19 @@
         <span v-if="hasLocalChanges" class="panorama-bindings__dirty" role="status">有未保存修改</span>
       </div>
 
-      <div class="panorama-bindings__body">
-        <nav class="panorama-bindings__slots" aria-label="经营指标区域">
+      <div class="panorama-bindings__body" :class="{ 'is-branch-thumbnail': branchThumbnailWorkbench }">
+        <aside v-if="branchThumbnailWorkbench" class="panorama-bindings__preview-column">
+          <BranchConfigThumbnail :entries="catalogEntries" :selected-key="selectedCatalogKey" :screen-title="activeScreenName"
+                                 :disabled="writing || loading" @select="selectCatalogEntry" />
+          <nav v-if="drillCatalogEntries.length" class="panorama-bindings__drill-links" aria-label="下钻页面配置">
+            <h3>下钻页面</h3>
+            <button v-for="entry in drillCatalogEntries" :key="entry.key" type="button"
+                    :data-testid="`drill-slot-${entry.slot}`" :aria-pressed="selectedCatalogKey === entry.key"
+                    :disabled="writing || loading" @click="selectCatalogEntry(entry)">{{ entry.label }}</button>
+            <p>下钻页面沿用父屏数据来源，可在此单独配置。</p>
+          </nav>
+        </aside>
+        <nav v-else class="panorama-bindings__slots" aria-label="经营指标区域">
           <h3>{{ hasNewDisplayPresentation || legacyCatalogEntries.length ? '可见组件' : '展示内容' }}</h3>
           <template v-if="hasNewDisplayPresentation || legacyCatalogEntries.length">
             <button v-for="entry in catalogEntries" :key="entry.key" type="button"
@@ -133,22 +144,31 @@
 
         <main class="panorama-bindings__editor" aria-live="polite">
           <template v-if="selectedSpec">
+            <h2 v-if="branchThumbnailWorkbench" class="panorama-bindings__configuration-heading" data-testid="configuration-heading">配置信息</h2>
             <header class="panorama-bindings__editor-head">
               <div>
-                <h2>{{ hasNewDisplayPresentation || legacyCatalogEntries.length ? (catalogDisplayLabel(selectedCatalogEntry) || selectedSpec.label) : selectedSpec.label }}</h2>
+                <h2><span v-if="branchThumbnailWorkbench" class="panorama-bindings__current-label">当前组件：</span>{{ hasNewDisplayPresentation || legacyCatalogEntries.length ? (catalogDisplayLabel(selectedCatalogEntry) || selectedSpec.label) : selectedSpec.label }}</h2>
                 <p data-testid="binding-guidance">{{ selectedCatalogEntry?.kind === 'INSTITUTION_MAP' ? '机构分布来自授权机构目录，经营指标沿用机构排名配置。' : selectedCatalogEntry?.derivedNotes?.length ? selectedCatalogEntry.derivedNotes.join('；') : (selectedCatalogReadonly ? '系统生成指标，只读展示。' : selectedGuidance) }}</p>
               </div>
               <span v-if="selectedBinding?.dsId && !selectedCatalogReadonly" class="panorama-bindings__bound">已选择数据来源<span v-if="autoReviewSlots.has(selectedSlot)">·待核验</span></span>
             </header>
 
-            <label class="panorama-bindings__field-label" for="panorama-component-title">标题</label>
+            <h3 v-if="branchThumbnailWorkbench" class="panorama-bindings__subheading">基础配置</h3>
+            <label class="panorama-bindings__field-label" for="panorama-component-title">{{ branchThumbnailWorkbench ? '组件标题' : '标题' }}</label>
             <input id="panorama-component-title" data-testid="component-title" :value="componentTitle"
-                   placeholder="留空恢复默认标题" :disabled="writing || loading || selectedComponentSourceMissing || selectedCatalogEntry?.kind === 'SYSTEM_METRIC' || selectedCatalogEntry?.titleEditable === false" @input="updateComponentTitle($event.target.value)" />
+                   :placeholder="branchThumbnailWorkbench ? componentDefaultTitle : '留空恢复默认标题'" :disabled="writing || loading || selectedComponentSourceMissing || selectedCatalogEntry?.kind === 'SYSTEM_METRIC' || selectedCatalogEntry?.titleEditable === false" @input="updateComponentTitle($event.target.value)" />
             <p class="panorama-bindings__hint">{{ selectedCatalogEntry?.titleEditable === false ? '此组件使用页面固定标题。' : `${componentDefaultTitle}；清空后恢复默认标题。` }}</p>
             <p v-if="selectedCatalogEntry?.kind === 'INSTITUTION_MAP'" class="panorama-bindings__hint">数据来自当前授权机构目录/经营画像，仅区域标题可改。</p>
             <p v-if="selectedComponentSourceMissing" class="panorama-bindings__error" role="alert">当前组件的来源区块缺失，已停止绑定编辑，请先核对组件与区块的对应关系。</p>
             <p v-else-if="selectedCatalogEntry?.kind === 'SYSTEM_METRIC'" class="panorama-bindings__hint">该指标由运行态系统生成，没有独立数据来源、字段或周期配置。</p>
 
+            <div :class="{ 'panorama-bindings__basic-grid': branchThumbnailWorkbench }">
+            <section v-if="branchThumbnailWorkbench && !selectedCatalogReadonly" class="panorama-bindings__source-field">
+              <label class="panorama-bindings__field-label" for="panorama-datasource">数据来源</label>
+              <PanoramaDatasourcePicker id="panorama-datasource" data-testid="slot-datasource"
+                fit-viewport :sources="availableDatasources" :disabled="writing || loading" v-model="selectedDatasourceId" @change="onDatasourceChange" />
+              <p v-if="sharedDatasourceComponentCount > 1" class="panorama-bindings__hint">共用来源的组件会同时受影响，标题和展示字段分别保存。</p>
+            </section>
             <section v-if="comparisonConfigurable" class="panorama-bindings__comparison-mode" data-testid="comparison-mode-entry">
               <label class="panorama-bindings__field-label" for="comparison-mode">比较方式</label>
               <select id="comparison-mode" class="panorama-bindings__comparison-select" data-testid="comparison-mode" :value="comparisonMode" :disabled="writing || loading" @change="setComparisonMode($event.target.value)">
@@ -159,8 +179,17 @@
               </select>
               <p class="panorama-bindings__hint">目录比较按当前指标单位计算；历史来源字段只在选择历史来源比较后展开。</p>
             </section>
+            <section v-else-if="branchThumbnailWorkbench && !selectedCatalogReadonly" class="panorama-bindings__period-field">
+              <label class="panorama-bindings__field-label" for="panorama-period">统计周期</label>
+              <select id="panorama-period" data-testid="binding-period" :disabled="writing || loading"
+                      :value="selectedBinding.period" @change="setPeriod($event.target.value)">
+                <option v-for="option in periodOptions" :key="option.value" :value="option.value" :disabled="option.disabled">{{ option.label }}</option>
+              </select>
+            </section>
+            </div>
 
             <MetricBindingComposer v-if="!selectedCatalogReadonly || periodComparisonConfigurable"
+              :workbench="branchThumbnailWorkbench"
               :key="`${activeScreenId}-${selectedCatalogEntry?.key || selectedSlot}`"
               :slot-key="selectedSlot"
               :slot-label="selectedSpec.label"
@@ -254,8 +283,8 @@
               </p>
             </div>
 
-            <label v-if="!selectedCatalogReadonly" class="panorama-bindings__field-label" for="panorama-datasource">数据来源</label>
-            <PanoramaDatasourcePicker v-if="!selectedCatalogReadonly"
+            <label v-if="!selectedCatalogReadonly && !branchThumbnailWorkbench" class="panorama-bindings__field-label" for="panorama-datasource">数据来源</label>
+            <PanoramaDatasourcePicker v-if="!selectedCatalogReadonly && !branchThumbnailWorkbench"
               id="panorama-datasource"
               data-testid="slot-datasource"
               :sources="availableDatasources"
@@ -298,8 +327,8 @@
 
             <p v-if="selectedSlot === 'citySummary'" class="panorama-bindings__hint">城市汇总必须使用已按城市汇总的来源，系统不会自动累加机构指标。</p>
             </details>
-            <label v-if="!selectedCatalogReadonly" class="panorama-bindings__field-label" for="panorama-period">统计周期</label>
-            <select v-if="!selectedCatalogReadonly" id="panorama-period" data-testid="binding-period" :disabled="writing || loading"
+            <label v-if="!selectedCatalogReadonly && (!branchThumbnailWorkbench || comparisonConfigurable)" class="panorama-bindings__field-label" for="panorama-period">统计周期</label>
+            <select v-if="!selectedCatalogReadonly && (!branchThumbnailWorkbench || comparisonConfigurable)" id="panorama-period" data-testid="binding-period" :disabled="writing || loading"
                     :value="selectedBinding.period" @change="setPeriod($event.target.value)">
               <option v-for="option in periodOptions" :key="option.value" :value="option.value" :disabled="option.disabled">{{ option.label }}</option>
             </select>
@@ -365,6 +394,7 @@ import {
 import PanoramaDatasourcePicker from './PanoramaDatasourcePicker.vue';
 import PanoramaDataVerification from './PanoramaDataVerification.vue';
 import MetricBindingComposer from './MetricBindingComposer.vue';
+import BranchConfigThumbnail from './BranchConfigThumbnail.vue';
 import { mergePeriodMetrics } from './screenMetricBinding';
 import {
   buildDatasourceFieldOptions,
@@ -853,6 +883,9 @@ const canvasVersion = computed(() => canvas.value?.canvasVersion ?? null);
 const isCodePresentation = computed(() => canvasStyle.value?.presentation?.type === 'CODE'
   && canvasStyle.value?.presentation?.template === selectedTemplate.value);
 const hasNewDisplayPresentation = computed(() => canvasStyle.value?.presentation?.displaySchemaVersion === 1);
+const branchThumbnailWorkbench = computed(() => hasNewDisplayPresentation.value
+  && selectedTemplate.value === 'branch-overview-v1'
+  && !['CITY', 'BRANCH'].includes(String(screenScope.value.viewLevel || '').toUpperCase()));
 
 // 迁移候选识别不复用 isCodePresentation：旧 CODE 包本身也可能没有新展示子协议。
 const malformedLegacyDraft = computed(() => {
@@ -2213,6 +2246,8 @@ defineExpose({
 .panorama-bindings__section-head p { margin:4px 0 0; color:var(--color-text-muted, #909399); font-size:12px; }
 .panorama-bindings__dirty { color:var(--color-warning-700, #8b5b00); font-size:12px; }
 .panorama-bindings__body { display:grid; grid-template-columns:240px minmax(0,1fr); gap:14px; padding:0 16px 16px; }
+.panorama-bindings__body.is-branch-thumbnail { grid-template-columns:minmax(0, .96fr) minmax(0, 1.04fr); gap:16px; }
+.panorama-bindings__body.is-branch-thumbnail > .panorama-bindings__editor { padding:18px 20px; }
 .panorama-bindings__slots, .panorama-bindings__editor { min-width:0; padding:16px; border:1px solid var(--color-border, #ebeef5); border-radius:var(--radius-control, 4px); background:var(--color-surface, #fff); }
 .panorama-bindings__slots { display:flex; flex-direction:column; gap:6px; }
 .panorama-bindings__slots h3 { margin:0 0 4px; font-size:14px; }
@@ -2239,5 +2274,60 @@ defineExpose({
 .panorama-bindings__field-row em { margin-left:5px; color:var(--color-danger-700, #b42318); font-size:11px; font-style:normal; }
 .panorama-bindings__unit-hint { grid-column:2 / 4; color:var(--color-text-muted, #909399); font-size:11px; }
 .panorama-bindings__footer { display:flex; justify-content:flex-end; margin-top:14px; color:var(--color-text-muted, #909399); font-size:12px; }
-@media (max-width:760px) { .panorama-bindings { padding:16px; } .panorama-bindings__header, .panorama-bindings__body { display:block; } .panorama-bindings__actions { margin-top:12px; } .panorama-bindings__slots { margin-bottom:14px; } .panorama-bindings__field-row { grid-template-columns:1fr; } .panorama-bindings__unit-hint { grid-column:auto; } .panorama-bindings__screen-bar { align-items:stretch; flex-direction:column; } }
+.panorama-bindings--visual { gap:16px; color:#27344b; font-size:14px; --el-color-primary:#2d63dc; --el-color-primary-light-3:#7097e9; --el-color-primary-light-9:#edf3ff; }
+.panorama-bindings--visual .panorama-bindings__header { margin:0; align-items:center; min-height:64px; }
+.panorama-bindings--visual .panorama-bindings__header h1 { font-size:28px; line-height:1.4; font-weight:700; color:#172339; }
+.panorama-bindings--visual .panorama-bindings__header p { font-size:14px; color:#718099; line-height:22px; }
+.panorama-bindings--visual .panorama-bindings__eyebrow { display:none; }
+.panorama-bindings--visual .panorama-bindings__actions :deep(.el-button) { height:40px; padding:0 24px; margin-left:0; font-size:14px; border-radius:4px; }
+.panorama-bindings--visual .panorama-bindings__actions :deep(.el-button--primary) { background:#2d63dc; border-color:#2d63dc; }
+.panorama-bindings--visual .panorama-bindings__screen-bar { min-height:68px; padding:16px 20px; margin:0; border-color:#e1e9f4; box-shadow:none; }
+.panorama-bindings--visual .panorama-bindings__screen-bar label { font-weight:600; }
+.panorama-bindings--visual .panorama-bindings__screen-bar select { font-size:14px; height:38px; border-color:#dbe4f0; }
+.panorama-bindings--visual .panorama-bindings__workbench { padding:0; background:transparent; border:0; box-shadow:none; overflow:visible; }
+.panorama-bindings--visual .panorama-bindings__workbench > [data-testid="business-test-notice"] { padding:0 2px; margin:0 0 12px; color:#78879c; }
+.panorama-bindings--visual .panorama-bindings__body { padding:0; align-items:start; }
+.panorama-bindings__preview-column { min-width:0; position:sticky; top:16px; }
+.panorama-bindings--visual .panorama-bindings__editor { padding:20px; border:1px solid #e1e9f4; border-radius:6px; background:#fff; min-height:650px; }
+.panorama-bindings__configuration-heading { margin:0 0 12px; color:#172339; font-size:21px; line-height:28px; font-weight:700; }
+.panorama-bindings--visual .panorama-bindings__editor-head { padding-bottom:15px; border-bottom:1px solid #e9eef6; }
+.panorama-bindings--visual .panorama-bindings__editor-head h2 { margin:0 0 5px; font-size:15px; line-height:22px; color:#2d63dc; }
+.panorama-bindings__current-label { color:#7b8aa4; font-weight:400; }
+.panorama-bindings__subheading { margin:18px 0 8px; font-size:17px; font-weight:600; color:#27344b; }
+.panorama-bindings--visual .panorama-bindings__field-label { color:#3d4960; font-size:14px; font-weight:500; margin:12px 0 8px; }
+.panorama-bindings--visual .panorama-bindings__editor > input, .panorama-bindings--visual .panorama-bindings__editor > select { height:39px; border-color:#dbe4f0; color:#37465d; font:inherit; }
+.panorama-bindings--visual .panorama-bindings__editor input:focus-visible, .panorama-bindings--visual .panorama-bindings__editor select:focus-visible { outline:2px solid #82a7f0; outline-offset:1px; }
+.panorama-bindings__basic-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; margin-top:4px; }
+.panorama-bindings__basic-grid > * { min-width:0; }
+.panorama-bindings__basic-grid .panorama-bindings__comparison-mode { padding:0; margin:0; border:0; background:none; }
+.panorama-bindings__basic-grid .panorama-bindings__comparison-select { height:39px; border-color:#dbe4f0; font:inherit; }
+.panorama-bindings__period-field select { width:100%; height:39px; padding:0 10px; border:1px solid #dbe4f0; border-radius:4px; background:#fff; color:#37465d; font:inherit; }
+.panorama-bindings--visual .panorama-bindings__advanced { padding:13px 14px; border:1px solid #e1e9f4; border-radius:5px; margin:18px 0 10px; background:#f8faff; }
+.panorama-bindings--visual .panorama-bindings__advanced > summary { cursor:pointer; font-size:14px; font-weight:500; color:#40516d; }
+.panorama-bindings--visual .panorama-bindings__advanced[open] > summary { margin-bottom:12px; }
+.panorama-bindings--visual :deep(.el-select__wrapper) { min-height:38px; font-size:14px; box-shadow:0 0 0 1px #dbe4f0 inset; }
+.panorama-bindings--visual :deep(.metric-binding__head h3) { font-size:17px; color:#27344b; }
+.panorama-bindings--visual :deep(.metric-binding__head p) { line-height:19px; }
+.panorama-bindings--visual :deep(.metric-binding__periods h4) { margin:14px 0 8px; font-size:15px; }
+.panorama-bindings--visual :deep(.metric-binding__actions .el-button) { min-width:0; white-space:normal; height:auto; min-height:34px; padding:8px 12px; }
+.panorama-bindings--visual :deep(.metric-binding__period .el-form-item) { margin-bottom:12px; }
+.panorama-bindings__drill-links { margin-top:14px; padding:16px 20px; border:1px solid #e1e9f4; border-radius:6px; background:#fff; }
+.panorama-bindings__drill-links h3 { margin:0 0 12px; font-size:15px; }
+.panorama-bindings__drill-links button { padding:8px 12px; margin:0 8px 8px 0; background:#fff; border:1px solid #dbe4f0; border-radius:4px; color:#40516d; font:inherit; cursor:pointer; }
+.panorama-bindings__drill-links button[aria-pressed="true"] { border-color:#2d63dc; color:#2d63dc; background:#edf3ff; }
+.panorama-bindings__drill-links button:focus-visible { outline:2px solid #82a7f0; outline-offset:2px; }
+.panorama-bindings__drill-links p { margin:0; color:#78879c; font-size:12px; }
+@media(max-width:1100px) {
+  .panorama-bindings__body.is-branch-thumbnail { grid-template-columns:minmax(0,1fr); }
+  .panorama-bindings__preview-column { position:static; }
+  .panorama-bindings--visual .panorama-bindings__header h1 { font-size:24px; }
+}
+@media(max-width:600px) {
+  .panorama-bindings--visual { padding:12px; }
+  .panorama-bindings--visual .panorama-bindings__editor { padding:14px; }
+  .panorama-bindings__basic-grid { grid-template-columns:1fr; gap:0; }
+  .panorama-bindings--visual .panorama-bindings__screen-bar select { min-width:0; width:100%; }
+  .panorama-bindings--visual .panorama-bindings__actions :deep(.el-button) { padding:0 14px; }
+}
+@media (max-width:760px) { .panorama-bindings { padding:16px; } .panorama-bindings__header, .panorama-bindings__body { display:block; } .panorama-bindings__actions { margin-top:12px; } .panorama-bindings__slots, .branch-config-thumbnail { margin-bottom:14px; } .panorama-bindings__field-row { grid-template-columns:1fr; } .panorama-bindings__unit-hint { grid-column:auto; } .panorama-bindings__screen-bar { align-items:stretch; flex-direction:column; } }
 </style>

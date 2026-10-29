@@ -8,7 +8,7 @@
       filterable
       clearable
       teleported
-      popper-class="panorama-datasource-picker__popper"
+      :popper-class="`panorama-datasource-picker__popper${fitViewport ? ' panorama-datasource-picker__popper--workbench' : ''}`"
       style="width: 100%"
       @update:model-value="onUpdate"
       @change="onChange"
@@ -44,6 +44,7 @@ const attrs = useAttrs();
 const props = defineProps({
   sources: { type: Array, default: () => [] },
   modelValue: { type: [String, Number], default: '' },
+  fitViewport: { type: Boolean, default: false },
   disabled: { type: Boolean, default: false },
   placeholder: { type: String, default: '请选择当前屏可用数据源' }
 });
@@ -87,4 +88,12 @@ function onChange(value) {
 .panorama-datasource-picker__option strong { color: #1f2937; font-size: 13px; }
 .panorama-datasource-picker__option span { color: #64748b; font-size: 11px; }
 .panorama-datasource-picker__option small { color: #8a5b1d; white-space: normal; }
+</style>
+
+<style>
+/* 浮层传送到 body，只约束新工作台的选择器，避免窄屏被历史 420px 候选宽度撑开。 */
+.panorama-datasource-picker__popper--workbench.el-popper { max-width:calc(100vw - 24px); }
+.panorama-datasource-picker__popper--workbench .el-select-dropdown,
+.panorama-datasource-picker__popper--workbench .panorama-datasource-picker__option { min-width:0 !important; max-width:100%; }
+.panorama-datasource-picker__popper--workbench .el-select-dropdown__item { height:auto; min-height:34px; padding-top:7px; padding-bottom:7px; line-height:1.5; white-space:normal; overflow-wrap:anywhere; }
 </style>

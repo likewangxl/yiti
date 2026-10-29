@@ -35,6 +35,19 @@ function mountComposer(props = {}) {
 }
 
 describe('MetricBindingComposer', () => {
+  it('宽配置工作台按字段表格编辑并沿用原绑定提交逻辑', async () => {
+    const wrapper = mountComposer({ workbench: true });
+    expect(wrapper.get('[data-testid="metric-workbench-table"]').text()).toContain('绑定指标');
+    expect(wrapper.findAll('[data-testid="metric-catalog-assign-value"]')).toHaveLength(1);
+    wrapper.get('[data-testid="metric-catalog-assign-value"]').findComponent({ name: 'ElSelect' }).vm.$emit('change', 'M_0265');
+    await wrapper.vm.$nextTick();
+    await wrapper.get('[data-testid="metric-catalog-apply"]').trigger('click');
+    const plan = wrapper.emitted('apply')[0][0];
+    expect(plan.ok).toBe(true);
+    expect(plan.binding.fields.value).toBe('一般性存款月均余额-机构');
+    expect(plan.binding.units.value).toBe('YUAN');
+    wrapper.unmount();
+  });
   it('把数值与单位移到首行，右侧保留维度和分类，不再提供独立搜索栏', () => {
     const wrapper = mountComposer({ showPeriodComparisons: true });
     expect(wrapper.find('[data-testid="metric-catalog-search"]').exists()).toBe(false);

@@ -1,9 +1,9 @@
 <template>
-  <section class="metric-binding" data-testid="metric-catalog-binder">
+  <section class="metric-binding" :class="{ 'metric-binding--workbench': workbench }" data-testid="metric-catalog-binder">
     <header class="metric-binding__head">
       <div>
-        <h3>从指标库绑定</h3>
-        <p>选择本组件需要展示的业务指标，并核对单位。已有绑定会自动回显；单位无法识别时，请按指标实际口径选择。</p>
+        <h3>{{ workbench ? '展示字段' : '从指标库绑定' }}</h3>
+        <p>{{ workbench ? '从指标库选择对应指标并核对单位，已有绑定会保留。' : '选择本组件需要展示的业务指标，并核对单位。已有绑定会自动回显；单位无法识别时，请按指标实际口径选择。' }}</p>
       </div>
       <el-button data-testid="metric-catalog-reload" :disabled="disabled || loadingCatalog" @click="loadCatalog">刷新目录</el-button>
     </header>
@@ -15,7 +15,35 @@
     <el-alert v-if="shape.blocked" data-testid="metric-catalog-blocked" type="warning" :closable="false" show-icon :title="shape.reason" />
 
     <el-form v-else label-position="top" size="default" class="metric-binding__form" @submit.prevent>
-      <div class="metric-binding__selection-row" :class="{ 'metric-binding__selection-row--filters-only': !primaryMetricFields.length }" data-testid="metric-catalog-selection-row">
+      <div v-if="workbench && !comparisonsOnly" class="metric-binding__table-wrap">
+        <table class="metric-binding__table" data-testid="metric-workbench-table">
+          <thead><tr><th scope="col">字段名称</th><th scope="col">绑定指标</th><th scope="col">源单位</th></tr></thead>
+          <tbody>
+            <tr v-for="field in primaryMetricFields" :key="field.semantic">
+              <th scope="row">{{ field.label }}<span v-if="field.required" class="metric-binding__required" aria-label="必填">*</span></th>
+              <td>
+                <el-select :id="`metric-catalog-${field.semantic}`" :data-testid="`metric-catalog-assign-${field.semantic}`" :aria-label="`${field.label}绑定指标`"
+                  filterable :filter-method="filterMetrics" @visible-change="resetMetricSearch" :disabled="disabled"
+                  :model-value="assignments[field.semantic]?.metricCode || ''" :placeholder="metricPlaceholder(field)" @change="value => setMetric(field, value)">
+                  <el-option :label="metricEmptyLabel(field)" value="" />
+                  <el-option v-for="metric in optionsFor(field)" :key="metric.metricCode" :label="metricOptionLabel(metric)" :value="metric.metricCode" />
+                </el-select>
+                <p v-if="existingFieldFor(field) && !assignments[field.semantic]?.metricCode" class="metric-binding__current" :data-testid="`metric-catalog-existing-${field.semantic}`">保留：{{ existingFieldFor(field) }}</p>
+              </td>
+              <td>
+                <el-select v-if="field.unitKinds?.length" :data-testid="`metric-catalog-unit-${field.semantic}`" :aria-label="`${field.label}源单位`"
+                  :disabled="disabled" :model-value="assignments[field.semantic]?.unit || ''" :placeholder="unitPlaceholder(field)" @change="value => setUnit(field.semantic, value)">
+                  <el-option :label="unitEmptyLabel(field)" value="" />
+                  <el-option v-for="unit in field.unitKinds" :key="unit" :label="unitLabel(unit)" :value="unit" />
+                </el-select>
+                <span v-else>—</span>
+                <p v-if="existingUnitFor(field) && !assignments[field.semantic]?.metricCode" class="metric-binding__current" :data-testid="`metric-catalog-existing-unit-${field.semantic}`">保留：{{ existingUnitLabel(field) }}</p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div v-if="!workbench" class="metric-binding__selection-row" :class="{ 'metric-binding__selection-row--filters-only': !primaryMetricFields.length }" data-testid="metric-catalog-selection-row">
         <div v-for="field in primaryMetricFields.slice(0, 1)" :key="field.semantic" class="metric-binding__assign">
           <el-form-item :required="Boolean(field.required)">
             <template #label>
@@ -54,7 +82,7 @@
       <p class="hint" data-testid="metric-catalog-count">可绑定 {{ filtered.length }} 项，目录 {{ catalogItems.length }} 项。{{ namedGroup ? '当前屏使用命名机构组，只能选择机构指标。' : '未使用命名机构组时，聚合结果按全辖口径校验权限。' }}</p>
       <p v-for="note in suggestionNotes" :key="note" class="hint" data-testid="metric-catalog-note">{{ note }}</p>
 
-      <div v-for="field in primaryMetricFields.slice(1)" :key="field.semantic" class="metric-binding__assign">
+      <div v-for="field in (workbench ? [] : primaryMetricFields.slice(1))" :key="field.semantic" class="metric-binding__assign">
         <el-form-item :required="Boolean(field.required)">
           <template #label>
             <span>{{ field.label }}</span>
@@ -108,6 +136,18 @@
       <details v-if="!comparisonsOnly" class="metric-binding__advanced" data-testid="metric-catalog-advanced">
         <summary>高级取数设置</summary>
         <p class="hint">默认按组件和指标口径取数，仅在需要特殊汇总或筛选时调整。</p>
+        <div v-if="workbench" class="metric-binding__workbench-filters">
+          <el-form-item label="指标目录维度">
+            <el-select data-testid="metric-catalog-dim" v-model="baseDim" :disabled="disabled || namedGroup" placeholder="全部维度">
+              <el-option label="全部维度" value="" /><el-option label="机构" value="ORG" /><el-option label="员工" value="EMP" /><el-option label="客户" value="CUST" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="指标目录分类">
+            <el-select data-testid="metric-catalog-category" v-model="category" :disabled="disabled" placeholder="全部分类">
+              <el-option label="全部分类" value="" /><el-option v-for="item in categories" :key="item" :label="item" :value="item" />
+            </el-select>
+          </el-form-item>
+        </div>
         <div v-for="field in legacyMetricFields" :key="field.semantic" class="metric-binding__assign">
           <el-form-item :required="Boolean(field.required)">
             <template #label>
@@ -210,6 +250,7 @@ import { bindingShape, buildMetricBindingPlan, filterCatalog, suggestAssignments
 import { normalizeInitialFilters, resolveInitialCatalogAssignments } from './visibleMetricBindings';
 
 const props = defineProps({
+  workbench: { type: Boolean, default: false },
   slotKey: { type: String, default: '' },
   slotLabel: { type: String, default: '' },
   templateName: { type: String, default: '' },
@@ -724,6 +765,27 @@ function unitLabel(unit) {
 </script>
 
 <style scoped>
+.metric-binding--workbench { margin-top:22px; padding-top:18px; }
+.metric-binding--workbench .metric-binding__head h3 { font-size:17px; }
+.metric-binding__table-wrap { margin:14px 0 8px; border:1px solid #dfe7f2; border-radius:5px; overflow:hidden; }
+.metric-binding__table { width:100%; border-collapse:collapse; table-layout:fixed; color:#37465d; font-size:14px; }
+.metric-binding__table th, .metric-binding__table td { padding:10px 12px; border-right:1px solid #e4ebf5; border-bottom:1px solid #e4ebf5; text-align:left; vertical-align:middle; overflow-wrap:anywhere; }
+.metric-binding__table thead th { background:#f1f6fc; color:#5c6a82; font-size:13px; font-weight:500; }
+.metric-binding__table th:first-child { width:22%; }
+.metric-binding__table th:last-child { width:23%; }
+.metric-binding__table tbody th { font-weight:500; background:#fcfdff; }
+.metric-binding__table tr:last-child td, .metric-binding__table tr:last-child th { border-bottom:0; }
+.metric-binding__table td:last-child, .metric-binding__table th:last-child { border-right:0; }
+.metric-binding__table :deep(.el-select) { min-width:0; width:100%; }
+.metric-binding__workbench-filters { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+.metric-binding--workbench .metric-binding__period { grid-template-columns:minmax(90px,.9fr) minmax(0,1.4fr) minmax(90px,.7fr); gap:10px; }
+.metric-binding--workbench .metric-binding__actions { flex-wrap:wrap; margin-top:14px; }
+@container (max-width:430px) {
+  .metric-binding__table th, .metric-binding__table td { padding:8px 5px; font-size:12px; }
+  .metric-binding__table th:first-child { width:21%; }
+  .metric-binding__table th:last-child { width:28%; }
+  .metric-binding--workbench .metric-binding__period, .metric-binding__workbench-filters { grid-template-columns:1fr; }
+}
 .metric-binding { container-type: inline-size; --metric-control-width: 168px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--color-border, #ebeef5); }
 .metric-binding__head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 8px; }
 .metric-binding__head h3 { margin: 0; color: var(--color-text-strong, #303133); font-size: 14px; font-weight: 600; }

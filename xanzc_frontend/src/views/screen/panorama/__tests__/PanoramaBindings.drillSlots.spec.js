@@ -11,6 +11,7 @@ vi.mock('@/stores/permission', () => ({ usePermissionStore: () => ({ loaded: tru
 vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }), useRouter: () => ({ push: vi.fn() }) }));
 vi.mock('../PanoramaDatasourcePicker.vue', () => ({ default: { props: ['sources', 'modelValue', 'disabled'], template: '<select v-bind="$attrs" :value="modelValue" />' } }));
 vi.mock('../PanoramaDataVerification.vue', () => ({ default: { template: '<div />' } }));
+vi.mock('../BranchThumbnailChart.vue', () => ({ default: { template: '<div />' } }));
 vi.mock('../PanoramaIntegrationReadiness.vue', () => ({ default: { template: '<div />' } }));
 vi.mock('../PanoramaSettings.vue', () => ({ default: { template: '<div />' } }));
 vi.mock('../../presentation/editor/PresentationEditor.vue', () => ({ default: { template: '<div />' } }));
@@ -52,6 +53,17 @@ describe('PanoramaBindings schema1 drill slots', () => {
       directives: { 'bp-overflow-tooltip': {} }
     } });
     const wrapper = create();
+    await flushPromises();
+    expect(wrapper.classes()).toContain('panorama-bindings--visual');
+    expect(wrapper.get('[data-testid="configuration-heading"]').text()).toBe('配置信息');
+    expect(wrapper.find('.panorama-bindings__slots').exists()).toBe(false);
+    await wrapper.get('[data-config-key="main-card"]').trigger('click');
+    await wrapper.get('[data-testid="component-title"]').setValue('可编辑存款标题');
+    expect(wrapper.get('[data-config-key="main-card"]').text()).toContain('可编辑存款标题');
+    await wrapper.get('[data-config-key="overview-loan"]').trigger('click');
+    await wrapper.get('[data-config-key="main-card"]').trigger('click');
+    expect(wrapper.get('[data-testid="component-title"]').element.value).toBe('可编辑存款标题');
+    expect(api.saveScreenCanvas).not.toHaveBeenCalled();
     await vi.waitFor(() => expect(wrapper.find('[data-testid="drill-slot-citySummary"]').exists()).toBe(true));
     expect(wrapper.find('[data-testid="drill-slot-branchTrend"]').exists()).toBe(true);
     await wrapper.get('[data-testid="drill-slot-citySummary"]').trigger('click');

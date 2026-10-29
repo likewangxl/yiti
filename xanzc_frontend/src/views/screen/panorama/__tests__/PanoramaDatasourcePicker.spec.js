@@ -37,6 +37,12 @@ afterEach(() => {
 });
 
 describe('PanoramaDatasourcePicker', () => {
+  it('宽配置工作台为浮层增加独立视口约束，不影响普通选择器', async () => {
+    const normal = mountPicker();
+    expect(normal.findComponent({ name: 'ElSelect' }).props('popperClass')).toBe('panorama-datasource-picker__popper');
+    const workbench = mountPicker({ fitViewport: true });
+    expect(workbench.findComponent({ name: 'ElSelect' }).props('popperClass')).toContain('panorama-datasource-picker__popper--workbench');
+  });
   it('使用真实 Element Plus DOM 点击打开、按标签选择并以字符串 ID 发出 update/change', async () => {
     const wrapper = mountPicker();
     const picker = wrapper.get('[data-testid="slot-datasource"]');
