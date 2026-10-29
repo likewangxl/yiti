@@ -1083,6 +1083,28 @@ class CodeScreenPresentationValidatorTest {
     }
 
     @Test
+    void citySummaryAcceptsOperatingHeaderAmountsAndRatiosWithDeclaredUnits() throws Exception {
+        String bind = validBind("{\"cityCode\":\"city_code\",\"corpDeposit\":\"对公存款\","
+                        + "\"retailDeposit\":\"零售存款\",\"corpLoan\":\"对公贷款\","
+                        + "\"retailLoan\":\"零售贷款\",\"intermediaryIncome\":\"中收\","
+                        + "\"settlementDeposit\":\"结算性存款\",\"corpDepositRate\":\"对公存款率\"}",
+                "{\"corpDeposit\":\"YUAN\",\"retailDeposit\":\"TEN_THOUSAND\","
+                        + "\"corpLoan\":\"HUNDRED_MILLION\",\"retailLoan\":\"YUAN\","
+                        + "\"intermediaryIncome\":\"YUAN\",\"settlementDeposit\":\"TEN_THOUSAND\","
+                        + "\"corpDepositRate\":\"RATIO\"}");
+        CodeScreenPresentationValidator.validateBind(MAPPER.readTree(bind), "citySummary", "branch-overview-v1");
+    }
+
+    @Test
+    void citySummaryRejectsAmountUnitForNewRatio() throws Exception {
+        String bind = validBind("{\"cityCode\":\"city_code\",\"corpDepositRate\":\"比例\"}",
+                "{\"corpDepositRate\":\"YUAN\"}");
+        assertThatThrownBy(() -> CodeScreenPresentationValidator.validateBind(
+                MAPPER.readTree(bind), "citySummary", "branch-overview-v1"))
+                .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_LAYOUT_INVALID.getCode());
+    }
+
+    @Test
     void rejectsUnknownDatasourceColumnAndWrongDimensionMetricRole() throws Exception {
         RptScreenDatasource datasource = orgSubjectDatasource();
         String unknown = validBind("{\"value\":\"does_not_exist\"}", "{\"value\":\"YUAN\"}");

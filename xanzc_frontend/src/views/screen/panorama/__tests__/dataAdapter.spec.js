@@ -6,6 +6,49 @@ const binding = (slot, fields, units = {}) => ({
 });
 
 describe('panorama data adapter', () => {
+  it('citySummary 支持实际城市经营金额与四种比例字段，RATIO 转百分数且 EXCLUSIVE 多机构不累加比例', () => {
+    const model = adaptPanoramaResults({ citySummary: {
+      binding: binding('citySummary', {
+        orgCode: 'org', corpDeposit: 'corp_dep', retailDeposit: 'ret_dep',
+        corpLoan: 'corp_loan', retailLoan: 'ret_loan', intermediaryIncome: 'income',
+        settlementDeposit: 'settle', corpDepositRate: 'corp_rate', retailDepositRate: 'ret_rate',
+        corpLoanRate: 'corp_loan_rate', retailLoanRate: 'ret_loan_rate'
+      }, {
+        corpDeposit: 'YUAN', retailDeposit: 'TEN_THOUSAND', corpLoan: 'HUNDRED_MILLION',
+        retailLoan: 'YUAN', intermediaryIncome: 'YUAN', settlementDeposit: 'TEN_THOUSAND',
+        corpDepositRate: 'RATIO', retailDepositRate: 'PERCENT', corpLoanRate: 'RATIO', retailLoanRate: 'PERCENT'
+      }),
+      response: { columns: ['org','corp_dep','ret_dep','corp_loan','ret_loan','income','settle','corp_rate','ret_rate','corp_loan_rate','ret_loan_rate'], rows: [
+        ['A', 100000000, 200, 3, 400000000, 1000000, 500, .2, 20, .3, 30],
+        ['B', 200000000, 300, 4, 500000000, 2000000, 600, .4, 40, .5, 50]
+      ], quality: { subjectValueMode: 'EXCLUSIVE' }, columnsMeta: [
+        ['corp_dep','YUAN'], ['ret_dep','TEN_THOUSAND'], ['corp_loan','HUNDRED_MILLION'], ['ret_loan','YUAN'], ['income','YUAN'], ['settle','TEN_THOUSAND'],
+        ['corp_rate','RATIO'], ['ret_rate','PERCENT'], ['corp_loan_rate','RATIO'], ['ret_loan_rate','PERCENT']
+      ].map(([col, unit]) => ({ col, role: 'METRIC', unit })) }
+    } }, { panoramaInstitutions: [
+      { orgCode: 'A', cityCode: 'C1', cityName: '城市一' }, { orgCode: 'B', cityCode: 'C1', cityName: '城市一' }
+    ], view: { orgScopeMode: 'NAMED_GROUP' } });
+    const city = model.citySummaries.C1;
+    expect(city.kpis).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'corpDeposit', value: 3 }),
+      expect.objectContaining({ key: 'retailDeposit', value: 0.05 }),
+      expect.objectContaining({ key: 'corpDepositRate', value: null }),
+      expect.objectContaining({ key: 'retailDepositRate', value: null })
+    ]));
+    expect(model.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'RATE_CITY_SOURCE_REQUIRED', field: 'corpDepositRate' }),
+      expect.objectContaining({ code: 'RATE_CITY_SOURCE_REQUIRED', field: 'retailDepositRate' })
+    ]));
+  });
+
+  it('branches 保留城市排名消费的六种 ratio 指标，不从旧字段猜列', () => {
+    const model = adaptPanoramaResults({ branches: {
+      binding: binding('branches', { orgCode: 'org', retailDepositRate: 'rdr', retailLoanRate: 'rlr', retailNplRate: 'rnpl', corpDepositRate: 'cdr', corpLoanRate: 'clr', corpNplRate: 'cnpl' },
+        { retailDepositRate: 'RATIO', retailLoanRate: 'PERCENT', retailNplRate: 'PERCENT', corpDepositRate: 'PERCENT', corpLoanRate: 'RATIO', corpNplRate: 'PERCENT' }),
+      response: { columns: ['org','rdr','rlr','rnpl','cdr','clr','cnpl'], rows: [['A', .12, 13, 1.1, 14, .15, 1.2]] }
+    } });
+    expect(model.institutions[0].metrics).toMatchObject({ retailDepositRate: 12, retailLoanRate: 13, retailNplRate: 1.1, corpDepositRate: 14, corpLoanRate: 15, corpNplRate: 1.2 });
+  });
   it('columns 模式适配中间收入和营业收入字段，保留金额单位与值', () => {
     const model = adaptPanoramaResults({ composition: {
       binding: binding('composition', {

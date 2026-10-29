@@ -99,6 +99,15 @@ function isStrictFreeReportSource(source = {}) {
 export function getControlledSourceFieldOptions(source = {}) {
   const config = configOf(source);
   const kind = upper(source.sourceKind || source.source_kind || config.sourceKind);
+  // 对齐 ScreenQueryEngine.buildNamedKpiDetailSnapshot；机构快照与个人快照的列名不同。
+  if (kind === 'KPI_DETAIL' && config.scopeMode === 'NAMED_GROUP'
+      && Number(config.schemaVersion) === 2 && config.subjectType === 'ORG'
+      && config.mode === 'SNAPSHOT' && text(config.schemeCode)
+      && upper(source.dsType || source.ds_type) === 'SINGLE') {
+    const dims=new Set(['org_code','org_name','data_date','metric_code','metric_name','attention_label']);
+    const labels={org_code:'机构号',org_name:'机构名称',data_date:'数据日期',metric_code:'指标编码',metric_name:'指标名称',actual_value:'实际值',target_value:'目标值',weight:'权重',score:'得分',completion_rate:'完成率',gap:'缺口',attention_label:'关注事项',attention_count:'关注数量'};
+    return Object.entries(labels).map(([col,label])=>({col,label,role:dims.has(col)?'DIM':'METRIC',unit:col==='attention_count'?'COUNT':col==='completion_rate'?'PERCENT':null,fixed:true,builtin:true}));
+  }
   if (kind === 'M98_STAT' && isStrictM98Source(source)) {
     const definition = M98_PROFILE_DEFINITIONS[upper(config.profile)];
     return [

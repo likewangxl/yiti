@@ -49,6 +49,11 @@ describe('panorama bindings contract', () => {
       expect.objectContaining({ semantic: 'average', unitKinds: ['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION'] })
     ]));
     expect(BINDING_SLOTS.citySummary.oneOfRequired).toEqual(['cityCode', 'orgCode']);
+    expect(BINDING_SLOTS.citySummary.atLeastOneOf).toEqual([
+      'deposit', 'loan', 'customers', 'revenue', 'rate',
+      'corpDeposit', 'retailDeposit', 'corpLoan', 'retailLoan', 'intermediaryIncome', 'settlementDeposit',
+      'retailDepositRate', 'retailLoanRate', 'corpDepositRate', 'corpLoanRate'
+    ]);
     expect(BINDING_SLOTS.trend.fields).toEqual(expect.arrayContaining([
       expect.objectContaining({ semantic: 'deposit' }),
       expect.objectContaining({ semantic: 'loan' }),
@@ -165,6 +170,25 @@ describe('panorama bindings contract', () => {
     expect(validateBinding('trend', {
       dsId: 2, fields: { date: 'date', depositIncrease: 'increase' }, units: { depositIncrease: 'COUNT' }
     })).toContain('单位不适用: depositIncrease');
+  });
+
+  it('城市汇总每个新增金额/比例语义均可单独满足至少一个指标，且单位白名单准确', () => {
+    const amountFields = ['corpDeposit', 'retailDeposit', 'corpLoan', 'retailLoan', 'intermediaryIncome', 'settlementDeposit'];
+    const ratioFields = ['retailDepositRate', 'retailLoanRate', 'corpDepositRate', 'corpLoanRate'];
+    for (const semantic of amountFields) {
+      expect(validateBinding('citySummary', {
+        dsId: 2, fields: { cityCode: 'city', [semantic]: semantic }, units: { [semantic]: 'YUAN' }
+      })).toEqual([]);
+      expect(BINDING_SLOTS.citySummary.fields.find(field => field.semantic === semantic).unitKinds)
+        .toEqual(['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION']);
+    }
+    for (const semantic of ratioFields) {
+      expect(validateBinding('citySummary', {
+        dsId: 2, fields: { cityCode: 'city', [semantic]: semantic }, units: { [semantic]: 'RATIO' }
+      })).toEqual([]);
+      expect(BINDING_SLOTS.citySummary.fields.find(field => field.semantic === semantic).unitKinds)
+        .toEqual(['PERCENT', 'RATIO']);
+    }
   });
 
   it('排名可选净增和月均字段仍要求明确金额单位', () => {

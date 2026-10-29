@@ -67,5 +67,8 @@ const RETAIL_ENTRIES = Object.freeze([
 export function buildLegacyComponentCatalog(template) {
   const entries = template === CORPORATE_TEMPLATE ? CORPORATE_ENTRIES
     : template === RETAIL_TEMPLATE ? RETAIL_ENTRIES : [];
-  return entries.map(item => ({ ...item, fieldSemantics: [...item.fieldSemantics], derivedNotes: [...item.derivedNotes] }));
+  const labels={corpSegments:'重点客群信贷',corpAttention:'需要协调的事项',corpRanking:'对公存款排名',corpTargets:'对公经营目标',corpTrend:'对公存贷款趋势',
+    retailSegments:'客户分层',retailAttention:'经营事项与数据核验',retailRanking:'机构存款对照',retailTargets:'零售经营目标',branches:'陕西省机构分布'};
+  return entries.map(item => ({ ...item, label:labels[item.key] || item.label, fieldSemantics: [...item.fieldSemantics], derivedNotes: [...item.derivedNotes],
+    ...(item.key==='branches' ? {kind:'INSTITUTION_MAP',readOnly:true,editable:false,titleEditable:false,derivedNotes:['地图身份与坐标来自授权机构目录，地图经营指标沿用机构排名；不能通过这里覆盖机构台账。']} : {}) }));
 }

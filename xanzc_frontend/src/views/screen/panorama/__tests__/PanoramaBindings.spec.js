@@ -79,7 +79,8 @@ const screen = { id: 9, screenCode: 'SCR_CODE', screenName: '经营总览', view
   bizLine: 'COMMON', orgScopeMode: 'LEGACY_CONTEXT', status: 'ACTIVE' };
 const canvas = {
   screenId: 9, screenCode: 'SCR_CODE', canvasVersion: 4,
-  canvasStyleJson: JSON.stringify({ schemaVersion: 1, background: '#050e2b' }),
+  // 本组测试覆盖显式经营模板迁移；无 presentation 的坐标画布改由独立工作台原样维护。
+  canvasStyleJson: JSON.stringify({ schemaVersion: 1, background: '#050e2b', presentation:{type:'LEGACY'} }),
   canvasDraftJson: JSON.stringify({ components: [{ id: 'old', component: 'ChartWidget', blockId: 41,
     innerType: 'METRIC_CARD', style: { top: 1, left: 2 }, propValue: {}, bindJson: '{}', styleJson: '{}', drillJson: '{}' }] })
 };
@@ -139,6 +140,21 @@ function legacyMigrationCanvas({ bindingKey, template, label, innerType = 'METRI
 }
 
 describe('PanoramaBindings', () => {
+  it('专用经营数据集只读保留原绑定，禁止把它当通用字段重新映射', async () => {
+    api.listScreens.mockResolvedValue([screen]);
+    api.getScreenCanvas.mockResolvedValue({...canvas,canvasStyleJson:JSON.stringify({presentation:{type:'CODE',template:'branch-overview-v1'},dataClassification:'TEST'}),canvasDraftJson:JSON.stringify({components:[{id:'dataset',component:'ChartWidget',blockId:97,innerType:'TABLE_LIST',propValue:{bindingKey:'attention'},bindJson:JSON.stringify({dsId:9031,period:'LATEST',fields:{label:'name',count:'count',orgCode:'org_code'},units:{count:'COUNT'}})}]})});
+    api.listScreenDatasources.mockResolvedValue([{id:9031,bizLine:'COMMON',sourceKind:'FREE_REPORT',dsType:'SINGLE',configJson:JSON.stringify({schemaVersion:2,scopeMode:'NAMED_GROUP',dataClassification:'TEST',profile:'BRANCH_OVERVIEW',batchId:'TEST_BRANCH_QA'})}]);
+    const wrapper=mount(PanoramaBindings,{props:{screenId:9}});
+    await vi.waitFor(()=>expect(wrapper.find('[data-config-key="attention"]').exists()).toBe(true));await wrapper.get('[data-config-key="attention"]').trigger('click');
+    expect(wrapper.text()).toContain('专用经营数据集');
+    expect(wrapper.find('[data-testid="field-option-attention-label"]').exists()).toBe(false);
+    expect(wrapper.vm.collectValidBindings().problems).toEqual([]);
+    wrapper.vm.canvasStyle.dataClassification='LIVE';
+    expect(wrapper.vm.collectValidBindings().problems.join('')).toContain('专用经营数据集');
+    wrapper.vm.canvasStyle.dataClassification='TEST';
+    wrapper.vm.bindingState.attention.fields.label='other';
+    expect(wrapper.vm.collectValidBindings().problems.join('')).toContain('专用经营数据集');wrapper.unmount();
+  });
   beforeEach(() => {
     router.push.mockReset();
     router.back.mockReset();

@@ -68,7 +68,7 @@ describe('PanoramaBindings schema1 drill slots', () => {
     expect(wrapper.find('[data-testid="drill-slot-branchTrend"]').exists()).toBe(true);
     await wrapper.get('[data-testid="drill-slot-citySummary"]').trigger('click');
     expect(wrapper.get('[data-testid="component-title"]').element.disabled).toBe(true);
-    expect(wrapper.get('[data-testid="composer-fields"]').text()).toBe('orgCode,cityCode,cityName,deposit,loan,customers,revenue');
+    expect(wrapper.get('[data-testid="direct-field-workbench"]').findAll('[data-testid^="field-option-"]').map(field=>field.attributes('data-testid').replace('field-option-citySummary-',''))).toEqual(['orgCode','cityCode','cityName','deposit','loan','customers','revenue']);
     await wrapper.get('[data-testid="drill-slot-branchTrend"]').trigger('click');
     expect(wrapper.get('[data-testid="composer-fields"]').text()).toBe('date,deposit,loan');
     const originalDisplay = JSON.stringify(wrapper.vm.displaySession.presentation.display);

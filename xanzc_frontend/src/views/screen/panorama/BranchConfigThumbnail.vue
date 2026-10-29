@@ -4,21 +4,21 @@
     <div class="branch-config-thumbnail__screen" aria-label="分行经营总览页面缩略图">
       <h3 class="branch-config-thumbnail__screen-title">{{ screenTitle }}</h3>
       <div class="branch-config-thumbnail__top-row">
-        <BranchThumbnailTile v-for="entry in overviewEntries" :key="entry.key" :entry="entry" variant="overview" :selected="selectedKey === entry.key" :disabled="disabled" @select="select" />
+        <BranchThumbnailTile v-for="entry in overviewEntries" :key="entry.key" :entry="visualEntry(entry)" variant="overview" :selected="selectedKey === entry.key" :disabled="disabled" @select="select(entry)" />
       </div>
       <div class="branch-config-thumbnail__business" data-layout="2-2-1">
         <section v-for="group in businessGroups" :key="group.key" class="branch-config-thumbnail__group" :class="`branch-config-thumbnail__group--${group.key}`" :data-columns="group.key === 'revenue' ? '1' : '2'">
           <h4>{{ group.label }}</h4>
           <div class="branch-config-thumbnail__group-grid">
-            <BranchThumbnailTile v-for="entry in group.entries" :key="entry.key" :entry="entry" :selected="selectedKey === entry.key" :disabled="disabled" @select="select" />
+            <BranchThumbnailTile v-for="entry in group.entries" :key="entry.key" :entry="visualEntry(entry)" :selected="selectedKey === entry.key" :disabled="disabled" @select="select(entry)" />
           </div>
         </section>
       </div>
-      <div class="branch-config-thumbnail__analysis">
-        <BranchThumbnailTile v-for="entry in analysisEntries" :key="entry.key" :entry="entry" variant="analysis" :selected="selectedKey === entry.key" :disabled="disabled" @select="select" />
+      <div class="branch-config-thumbnail__analysis" :class="{ 'is-pair': analysisEntries.length === 2 }">
+        <BranchThumbnailTile v-for="entry in analysisEntries" :key="entry.key" :entry="visualEntry(entry)" variant="analysis" :selected="selectedKey === entry.key" :disabled="disabled" @select="select(entry)" />
       </div>
       <div v-if="extraEntries.length" class="branch-config-thumbnail__extras">
-        <BranchThumbnailTile v-for="entry in extraEntries" :key="entry.key" :entry="entry" :selected="selectedKey === entry.key" :disabled="disabled" @select="select" />
+        <BranchThumbnailTile v-for="entry in extraEntries" :key="entry.key" :entry="visualEntry(entry)" :selected="selectedKey === entry.key" :disabled="disabled" @select="select(entry)" />
       </div>
     </div>
     <footer class="branch-config-thumbnail__caption"><span>{{ footerText }}</span><span>当前选中：{{ currentLabel || '—' }}</span></footer>
@@ -36,13 +36,15 @@ const props = defineProps({
 const emit = defineEmits(['select']);
 const overviewKeys = ['overview-deposit', 'overview-deposit-composition', 'overview-loan', 'overview-loan-composition', 'overview-settlementDeposit'];
 const analysisKeys = ['business-growth', 'institution-map', 'institution-ranking'];
-const overviewEntries = computed(() => overviewKeys.map(key => props.entries.find(item => item.key === key)).filter(Boolean));
+const overviewEntries = computed(() => props.entries.some(entry=>entry.layoutGroup)
+  ? props.entries.filter(entry=>entry.layoutGroup==='OVERVIEW') : overviewKeys.map(key => props.entries.find(item => item.key === key)).filter(Boolean));
 const businessGroups = computed(() => [
-  { key: 'retail', label: '零售业务', entries: props.entries.filter(item => item.key.startsWith('business-retail-')) },
-  { key: 'corp', label: '对公业务', entries: props.entries.filter(item => item.key.startsWith('business-corp-')) },
-  { key: 'revenue', label: '收入', entries: props.entries.filter(item => item.key.startsWith('business-revenue-')) }
+  { key: 'retail', label: '零售业务', entries: props.entries.filter(item => item.layoutGroup==='RETAIL' || item.key.startsWith('business-retail-')) },
+  { key: 'corp', label: '对公业务', entries: props.entries.filter(item => item.layoutGroup==='CORP' || item.key.startsWith('business-corp-')) },
+  { key: 'revenue', label: '收入', entries: props.entries.filter(item => item.layoutGroup==='REVENUE' || item.key.startsWith('business-revenue-')) }
 ].filter(group => group.entries.length));
-const analysisEntries = computed(() => analysisKeys.map(key => props.entries.find(item => item.key === key)).filter(Boolean));
+const analysisEntries = computed(() => props.entries.some(entry=>entry.layoutGroup)
+  ? props.entries.filter(entry=>entry.layoutGroup==='ANALYSIS') : analysisKeys.map(key => props.entries.find(item => item.key === key)).filter(Boolean));
 const extraEntries = computed(() => {
   const used = new Set([...overviewEntries.value, ...businessGroups.value.flatMap(group => group.entries), ...analysisEntries.value].map(entry => entry.key));
   return props.entries.filter(entry => !used.has(entry.key));
@@ -50,6 +52,7 @@ const extraEntries = computed(() => {
 const currentLabel = computed(() => props.selectedLabel || props.entries.find(entry => entry.key === props.selectedKey)?.label || '');
 /** 仅切换编辑目标，数据查询和草稿写入继续由配置页负责。 */
 function select(entry) { if (!props.disabled) emit('select', entry); }
+function visualEntry(entry) { return {...entry,kind:entry.visualKind || entry.kind}; }
 </script>
 
 <style scoped>
@@ -68,6 +71,7 @@ function select(entry) { if (!props.disabled) emit('select', entry); }
 .branch-config-thumbnail__group-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; }
 .branch-config-thumbnail__group--revenue .branch-config-thumbnail__group-grid { grid-template-columns:1fr; }
 .branch-config-thumbnail__analysis { display:grid; grid-template-columns:1fr 1.3fr 1fr; gap:8px; margin-top:10px; }
+.branch-config-thumbnail__analysis.is-pair { grid-template-columns:1.35fr 1fr; }
 .branch-config-thumbnail__extras { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-top:10px; }
 .branch-config-thumbnail__caption { display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-top:16px; color:#8190a7; font-size:12px; line-height:18px; }
 .branch-config-thumbnail__caption span:last-child { color:#2d63dc; }

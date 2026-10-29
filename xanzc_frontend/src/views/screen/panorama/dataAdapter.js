@@ -173,7 +173,7 @@ function numeric(value) {
 function metricKind(slot, semantic, unit = null) {
   if (slot === 'attention' && semantic === 'count') return 'rawCount';
   if (semantic === 'customers' || (slot === 'customers' && semantic === 'value') || semantic === 'count') return 'count';
-  if (semantic === 'rate' || semantic === 'change'
+  if (semantic === 'rate' || semantic.endsWith('Rate') || semantic === 'change'
       || (['rate', 'loanRate'].includes(slot) && semantic === 'value')) return 'ratio';
   // 构成指标允许按比例绑定；只有单位明确为百分数/比例时才走比例换算，
   // 这样旧的 semantic=value 以及双列指标都可安全表示金额或比例构成。
@@ -698,7 +698,9 @@ function adaptBranches(table, binding, model, issues, options) {
       model.institutions.push(item);
       continue;
     }
-    for (const semantic of ['deposit', 'loan', 'customers', 'target', 'rate']) {
+    for (const semantic of ['deposit', 'loan', 'customers', 'target', 'rate',
+      'retailDepositRate', 'retailLoanRate', 'retailNplRate',
+      'corpDepositRate', 'corpLoanRate', 'corpNplRate']) {
       if (!binding.fields?.[semantic]) continue;
       item.metrics[semantic] = readMetric(row, binding, semantic, table, 'branches', issues).value;
     }
@@ -794,7 +796,9 @@ function adaptCitySummary(table, binding, model, issues, options) {
       const expectedSubjects = directory.filter(item => String(item.cityCode) === cityCode).length;
       const completeSubjects = group.orgCodes.size === expectedSubjects;
       const multiSubject = group.rows.length > 1;
-      for (const semantic of ['deposit', 'loan', 'customers', 'revenue', 'rate']) {
+      for (const semantic of ['deposit', 'loan', 'customers', 'revenue', 'rate',
+        'corpDeposit', 'retailDeposit', 'corpLoan', 'retailLoan', 'intermediaryIncome', 'settlementDeposit',
+        'retailDepositRate', 'retailLoanRate', 'corpDepositRate', 'corpLoanRate']) {
         if (!binding.fields?.[semantic]) continue;
         const metrics = group.rows.map(({ row }) =>
           readMetric(row, binding, semantic, table, 'citySummary', issues));
@@ -803,9 +807,9 @@ function adaptCitySummary(table, binding, model, issues, options) {
         if (!completeSubjects) {
           issue(issues, 'citySummary', 'INSUFFICIENT_COVERAGE',
             `城市指标 ${semantic} 缺少授权机构行，不能显示部分合计`, semantic);
-        } else if (multiSubject && semantic === 'rate') {
+        } else if (multiSubject && (semantic === 'rate' || semantic.endsWith('Rate'))) {
           issue(issues, 'citySummary', 'RATE_CITY_SOURCE_REQUIRED',
-            '多机构城市完成率不相加或平均，需独立城市比例来源', 'rate');
+            '多机构城市完成率不相加或平均，需独立城市比例来源', semantic);
         } else if (metrics.every(metric => metric && metric.value !== null && metric.value !== undefined)) {
           value = metrics.reduce((sum, metric) => sum + metric.value, 0);
         } else if (multiSubject) {
@@ -875,7 +879,9 @@ function adaptCitySummary(table, binding, model, issues, options) {
       ? readDimension(row, binding, 'cityName', table, 'citySummary', issues) : null;
     if (rowCityName !== null && rowCityName !== undefined && rowCityName !== '') city.cityName = rowCityName;
     else if (cityName !== null && cityName !== undefined && cityName !== '') city.cityName = cityName;
-    for (const semantic of ['deposit', 'loan', 'customers', 'revenue', 'rate']) {
+    for (const semantic of ['deposit', 'loan', 'customers', 'revenue', 'rate',
+      'corpDeposit', 'retailDeposit', 'corpLoan', 'retailLoan', 'intermediaryIncome', 'settlementDeposit',
+      'retailDepositRate', 'retailLoanRate', 'corpDepositRate', 'corpLoanRate']) {
       if (!binding.fields?.[semantic]) continue;
       const metric = readMetric(row, binding, semantic, table, 'citySummary', issues);
       city.kpis.push({ key: semantic, label: BINDING_SLOTS[semantic]?.label || semantic,

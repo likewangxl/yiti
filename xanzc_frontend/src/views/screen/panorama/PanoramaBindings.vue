@@ -6,7 +6,7 @@
         <h1 id="panorama-bindings-title">大屏组件配置</h1>
         <p>{{ branchThumbnailWorkbench ? '在缩略图中选择组件，配置标题、数据来源及展示字段后保存草稿。' : '选择大屏和组件，配置标题、数据来源及展示字段后保存草稿。' }}</p>
       </div>
-      <div class="panorama-bindings__actions">
+      <div v-if="!isCoordinateCanvas" class="panorama-bindings__actions">
         <el-button v-if="hasLocalChanges" data-testid="binding-cancel" :disabled="writing || loading" @click="cancelLocalChanges">取消修改</el-button>
         <el-button data-testid="binding-preview" title="请先保存草稿再预览" :disabled="!screenReady || writing || hasLocalChanges" @click="preview">预览</el-button>
         <el-button data-testid="binding-save" type="primary" :loading="saving" :disabled="writing || !screenReady" @click="saveDraft">保存草稿</el-button>
@@ -76,7 +76,7 @@
       <span v-if="branchThumbnailWorkbench && canvasStyle.dataClassification === 'TEST'" class="panorama-bindings__inline-notice" data-testid="business-test-notice" role="note">当前为测试大屏，来源不代表正式经营数据。</span>
     </section>
 
-    <div v-if="legacyComponents.length" class="panorama-bindings__legacy" data-testid="legacy-conversion-warning">
+    <div v-if="legacyComponents.length && !isCoordinateCanvas" class="panorama-bindings__legacy" data-testid="legacy-conversion-warning">
       <strong>检测到旧布局或其他模板的组件</strong>
       <span>保存会替换当前草稿组件树；已发布快照不会自动修改。请先确认已核对当前已发布版本。</span>
       <label>
@@ -85,7 +85,10 @@
       </label>
     </div>
 
-    <section v-if="screenReady" class="card-section panorama-bindings__workbench" aria-label="大屏组件配置">
+    <LegacyCanvasWorkbench v-if="isCoordinateCanvas" :key="loadedScreenId" :screen="activeScreen" :canvas="coordinateCanvas"
+      :datasources="datasources" :disabled="loading" :can-publish="publishPermissionGranted"
+      @dirty-change="localDirty = $event" @busy-change="legacyBusy = $event" @saved="handleCoordinateSaved" @preview="previewCoordinate" />
+    <section v-else-if="screenReady" class="card-section panorama-bindings__workbench" aria-label="大屏组件配置">
       <p v-if="!branchThumbnailWorkbench && canvasStyle.dataClassification === 'TEST'" data-testid="business-test-notice" class="panorama-bindings__hint" role="note">当前大屏为联调测试模式，测试来源不代表正式经营数据。正式展示需要接入并核对业务来源。</p>
       <div v-if="!branchThumbnailWorkbench" class="panorama-bindings__section-head">
         <div>
@@ -97,13 +100,20 @@
 
       <div class="panorama-bindings__body" :class="{ 'is-branch-thumbnail': branchThumbnailWorkbench }">
         <aside v-if="branchThumbnailWorkbench" class="panorama-bindings__preview-column">
-          <BranchConfigThumbnail :entries="catalogEntries" :selected-key="selectedCatalogKey" :screen-title="activeScreenName"
-                                 :disabled="writing || loading" @select="selectCatalogEntry" />
+          <nav v-if="canInspectDrillPages" class="panorama-bindings__context-tabs" aria-label="配置页面范围">
+            <button v-for="context in configurationContexts" :key="context.key" type="button" :data-testid="`config-context-${context.key}`"
+              :aria-pressed="configurationContext === context.key" :disabled="writing || loading" @click="changeConfigurationContext(context.key)">{{ context.label }}</button>
+          </nav>
+          <BranchConfigThumbnail v-if="useBranchThumbnail || configurationContext !== 'screen'" :entries="thumbnailEntries" :selected-key="thumbnailSelectedKey" :screen-title="thumbnailTitle"
+                                 :disabled="writing || loading" @select="selectThumbnailEntry" />
+          <OperatingConfigThumbnail v-else :entries="thumbnailEntries" :selected-key="selectedCatalogKey" :screen-title="activeScreenName"
+             :template="selectedTemplate" :presentation="hasNewDisplayPresentation ? displaySession.presentation : null"
+             :view-level="screenScope.viewLevel" :disabled="writing || loading" @select="selectCatalogEntry" />
           <nav v-if="drillCatalogEntries.length" class="panorama-bindings__drill-links" aria-label="下钻页面配置">
             <h3>下钻页面</h3>
             <button v-for="entry in drillCatalogEntries" :key="entry.key" type="button"
                     :data-testid="`drill-slot-${entry.slot}`" :aria-pressed="selectedCatalogKey === entry.key"
-                    :disabled="writing || loading" @click="selectCatalogEntry(entry)">{{ entry.label }}</button>
+                    :disabled="writing || loading" @click="selectCatalogEntry(entry)"><span :data-testid="`slot-${entry.slot}`">{{ entry.label }}</span></button>
             <p>下钻页面沿用父屏数据来源，可在此单独配置。</p>
           </nav>
         </aside>
@@ -153,15 +163,22 @@
               </div>
               <span v-if="selectedBinding?.dsId && !selectedCatalogReadonly" class="panorama-bindings__bound">已选择数据来源<span v-if="autoReviewSlots.has(selectedSlot)">·待核验</span></span>
             </header>
+            <p v-if="configurationContext === 'branch' && catalogEntries.some(entry => entry.key === selectedCatalogKey)" class="panorama-bindings__hint" role="note">此组件与父屏共享配置，修改会同时作用于父屏与支行下钻页面。</p>
+            <p v-if="selectedCatalogEntry?.kind === 'READONLY_REGION'" class="panorama-bindings__hint" role="note">{{ selectedCatalogEntry.description }}</p>
 
             <h3 v-if="branchThumbnailWorkbench" class="panorama-bindings__subheading">基础配置</h3>
             <label class="panorama-bindings__field-label" for="panorama-component-title">{{ branchThumbnailWorkbench ? '组件标题' : '标题' }}</label>
             <input id="panorama-component-title" data-testid="component-title" :value="componentTitle"
                    :placeholder="branchThumbnailWorkbench ? componentDefaultTitle : '留空恢复默认标题'" :disabled="writing || loading || selectedComponentSourceMissing || selectedCatalogEntry?.kind === 'SYSTEM_METRIC' || selectedCatalogEntry?.titleEditable === false" @input="updateComponentTitle($event.target.value)" />
             <p class="panorama-bindings__hint">{{ selectedCatalogEntry?.titleEditable === false ? '此组件使用页面固定标题。' : `${componentDefaultTitle}；清空后恢复默认标题。` }}</p>
-            <p v-if="selectedCatalogEntry?.kind === 'INSTITUTION_MAP'" class="panorama-bindings__hint">数据来自当前授权机构目录/经营画像，仅区域标题可改。</p>
+            <p v-if="selectedCatalogEntry?.kind === 'INSTITUTION_MAP'" class="panorama-bindings__hint">{{ selectedCatalogEntry.titleEditable === false ? '地图身份与坐标来自授权机构目录，此页面使用固定区域标题。' : '数据来自当前授权机构目录/经营画像，仅区域标题可改。' }}</p>
             <p v-if="selectedComponentSourceMissing" class="panorama-bindings__error" role="alert">当前组件的来源区块缺失，已停止绑定编辑，请先核对组件与区块的对应关系。</p>
             <p v-else-if="selectedCatalogEntry?.kind === 'SYSTEM_METRIC'" class="panorama-bindings__hint">该指标由运行态系统生成，没有独立数据来源、字段或周期配置。</p>
+            <p v-if="selectedDatasetNotice" class="panorama-bindings__hint" role="note">专用经营数据集：由专用模板解析记录，字段和单位随记录返回。此处保留原绑定，请在专用数据集维护入口管理。</p>
+            <div v-if="selectedBindingWarnings.length" class="panorama-bindings__conflict" data-testid="binding-contract-warning" role="alert">
+              <strong>已有绑定需要核对</strong><p v-for="warning in selectedBindingWarnings" :key="warning">{{ warning }}</p>
+              <p>原配置已保留；请确认正确来源和字段后再保存，不会自动换绑。</p>
+            </div>
 
             <div :class="{ 'panorama-bindings__basic-grid': branchThumbnailWorkbench }">
             <section v-if="branchThumbnailWorkbench && !selectedCatalogReadonly" class="panorama-bindings__source-field">
@@ -189,7 +206,23 @@
             </section>
             </div>
 
-            <MetricBindingComposer v-if="!selectedCatalogReadonly || periodComparisonConfigurable"
+            <section v-if="directFieldWorkbench" class="panorama-bindings__direct-fields" data-testid="direct-field-workbench">
+              <h3>展示字段</h3><p class="panorama-bindings__hint">按当前来源已声明的字段配置；保留其他组件共享字段，不自动合计或转换来源。</p>
+              <div class="panorama-bindings__direct-head" aria-hidden="true"><span>字段名称</span><span>来源字段</span><span>源单位</span></div>
+              <div v-for="fieldSpec in selectedFieldSpecs" :key="fieldSpec.semantic" class="panorama-bindings__field-row">
+                <label :for="`direct-field-${fieldSpec.semantic}`">{{ fieldSpec.label }}<em v-if="fieldSpec.required">必填</em></label>
+                <select :id="`direct-field-${fieldSpec.semantic}`" :data-testid="`field-option-${selectedSlot}-${fieldSpec.semantic}`" :disabled="!selectedDatasource || writing || loading"
+                  :value="selectedBinding.fields[fieldSpec.semantic] || ''" @change="setField(fieldSpec.semantic,$event.target.value)">
+                  <option value="">待配置</option><option v-if="selectedBinding.fields[fieldSpec.semantic] && !fieldOptionsFor(fieldSpec.semantic).some(option=>option.col===selectedBinding.fields[fieldSpec.semantic])" :value="selectedBinding.fields[fieldSpec.semantic]" disabled>{{ selectedBinding.fields[fieldSpec.semantic] }}（保留待核验）</option>
+                  <option v-for="option in fieldOptionsFor(fieldSpec.semantic)" :key="option.col" :value="option.col">{{ option.label }}（{{ option.col }}）</option>
+                </select>
+                <select v-if="fieldSpec.kind !== 'dimension' && fieldSpec.unitKinds?.length" :data-testid="`unit-${selectedSlot}-${fieldSpec.semantic}`" :aria-label="`${fieldSpec.label}源单位`"
+                  :disabled="!selectedDatasource || writing || loading" :value="unitFor(fieldSpec.semantic)" @change="setUnit(fieldSpec.semantic,$event.target.value)">
+                  <option value="">未知单位</option><option v-for="unit in fieldSpec.unitKinds" :key="unit" :value="unit">{{ unitLabel(unit) }}</option>
+                </select><span v-else class="panorama-bindings__hint">—</span>
+              </div>
+            </section>
+            <MetricBindingComposer v-else-if="!selectedCatalogReadonly || periodComparisonConfigurable"
               :workbench="branchThumbnailWorkbench"
               :key="`${activeScreenId}-${selectedCatalogEntry?.key || selectedSlot}`"
               :slot-key="selectedSlot"
@@ -299,7 +332,7 @@
             <p v-if="!selectedCatalogReadonly && !selectedDatasource" data-testid="datasource-required-hint" class="panorama-bindings__hint">请先选择数据源（数据来源），再配置展示字段和单位。</p>
             <p v-else-if="!selectedCatalogReadonly && selectedFieldSpecs.length && !hasApplicableFieldOptions" data-testid="datasource-fields-unavailable-hint" class="panorama-bindings__hint">已选择数据来源，但没有适用字段候选（展示字段），请核对字段角色或元数据。</p>
 
-            <div v-if="!hasNewDisplayPresentation || ['DERIVED_TOTAL', 'INHERITED_SLOT'].includes(selectedCatalogEntry?.kind)" class="panorama-bindings__fields">
+            <div v-if="!directFieldWorkbench && (!hasNewDisplayPresentation || ['DERIVED_TOTAL', 'INHERITED_SLOT'].includes(selectedCatalogEntry?.kind))" class="panorama-bindings__fields">
               <div v-for="fieldSpec in selectedFieldSpecs" :key="fieldSpec.semantic" class="panorama-bindings__field-row">
                 <label :for="`panorama-field-${fieldSpec.semantic}`">
                   {{ fieldSpec.label }}<em v-if="fieldSpec.required">需要配置</em>
@@ -310,6 +343,8 @@
                         :value="selectedBinding.fields[fieldSpec.semantic] || ''"
                         @change="setField(fieldSpec.semantic, $event.target.value)">
                   <option value="">待配置</option>
+                  <option v-if="selectedBinding.fields[fieldSpec.semantic] && !fieldOptionsFor(fieldSpec.semantic).some(option => option.col === selectedBinding.fields[fieldSpec.semantic])"
+                    :value="selectedBinding.fields[fieldSpec.semantic]" disabled>{{ selectedBinding.fields[fieldSpec.semantic] }}（已有绑定，来源待核验）</option>
                   <option v-for="option in fieldOptionsFor(fieldSpec.semantic)" :key="option.col" :value="option.col">
                     {{ option.label }}（{{ option.col }}）
                   </option>
@@ -342,7 +377,7 @@
     </section>
 
     <p v-if="screenReady && hasLocalChanges" class="panorama-bindings__hint" role="status">有未保存修改，请先保存草稿，再验证实际数据。</p>
-    <PanoramaDataVerification v-if="screenReady"
+    <PanoramaDataVerification v-if="screenReady && !isCoordinateCanvas"
       :screen="activeScreen" :canvas="canvas" :datasources="datasources"
       :slot-order="slotOrder" :binding-state="bindingState" :template="selectedTemplate"
       :disabled="writing || loading || hasLocalChanges" />
@@ -396,7 +431,11 @@ import PanoramaDatasourcePicker from './PanoramaDatasourcePicker.vue';
 import PanoramaDataVerification from './PanoramaDataVerification.vue';
 import MetricBindingComposer from './MetricBindingComposer.vue';
 import BranchConfigThumbnail from './BranchConfigThumbnail.vue';
-import { mergePeriodMetrics } from './screenMetricBinding';
+import OperatingConfigThumbnail from './OperatingConfigThumbnail.vue';
+import LegacyCanvasWorkbench from './LegacyCanvasWorkbench.vue';
+import { buildDrillConfigurationCatalog } from './drillConfigurationCatalog';
+import { canonicalUnit } from '../presentation/model/displayMetricsModel';
+import { bindingShape, mergePeriodMetrics } from './screenMetricBinding';
 import {
   buildDatasourceFieldOptions,
   buildSchemaFieldSpecs,
@@ -461,6 +500,8 @@ const autoGaps = ref([]);
 const autoReviewSlots = reactive(new Set());
 const manualSlots = reactive(new Set());
 const localDirty = ref(false);
+const legacyBusy = ref(false);
+const configurationContext = ref('screen');
 let loadGeneration = 0;
 let disposed = false;
 const displaySession = ref(createPresentationEditorSession({}, { type: 'CODE', template: 'branch-overview-v1' }));
@@ -473,7 +514,7 @@ const publishPermissionGranted = computed(() => permissionStore.loaded === true
   && permissionStore.canAccess(PUBLISH_RESOURCE));
 const canvasVersionValid = computed(() => Number.isSafeInteger(canvas.value?.canvasVersion)
   && canvas.value.canvasVersion >= 0);
-const writing = computed(() => saving.value || publishing.value || publishDialogOpen.value);
+const writing = computed(() => saving.value || publishing.value || publishDialogOpen.value || legacyBusy.value);
 const canStartPublish = computed(() => screenReady.value && !loading.value && !saving.value && !publishing.value
   && !publishDialogOpen.value && !hasLocalChanges.value && canvasVersionValid.value && publishPermissionGranted.value);
 const canConfirmPublish = computed(() => screenReady.value && !loading.value && !saving.value && !publishing.value
@@ -524,7 +565,8 @@ const hasLocalChanges = computed(() => localDirty.value || Boolean(displaySessio
 const templateSpec = slot => (isCorporateTemplate.value
   ? CORPORATE_BINDING_SLOTS[slot]
   : isRetailTemplate.value ? RETAIL_BINDING_SLOTS[slot] : BINDING_SLOTS[slot]);
-const selectedSpec = computed(() => templateSpec(selectedSlot.value) || null);
+const selectedSpec = computed(() => selectedCatalogEntry.value?.kind === 'READONLY_REGION'
+  ? { label:selectedCatalogEntry.value.label, fields:[] } : templateSpec(selectedSlot.value) || null);
 const selectedBinding = computed(() => {
   if (!bindingState[selectedSlot.value]) bindingState[selectedSlot.value] = emptyBinding(selectedSlot.value);
   return bindingState[selectedSlot.value];
@@ -553,6 +595,7 @@ const selectedFieldSpecs = computed(() => {
   return (selectedSpec.value.fields || []).filter(fieldSpec => semantics.includes(fieldSpec.semantic));
 });
 const selectedDatasource = computed(() => datasources.value.find(item => String(item.id) === String(selectedBinding.value.dsId)) || null);
+const selectedDatasetNotice = computed(() => getDatasourceFieldOptions(selectedDatasource.value || {}).find(option=>option.role==='NOTICE') || null);
 const selectedSchemaInitialBinding = computed(() => {
   if (!hasNewDisplayPresentation.value) return { fields: {}, units: {} };
   if (selectedCatalogEntry.value?.kind === 'INHERITED_SLOT') return {
@@ -594,10 +637,23 @@ const runtimeCatalog = computed(() => buildRuntimeComponentCatalog(hasNewDisplay
   : canvasStyle.value));
 const legacyCatalogEntries = computed(() => !hasNewDisplayPresentation.value
   ? buildLegacyComponentCatalog(selectedTemplate.value, bindingState) : []);
-const catalogEntries = computed(() => hasNewDisplayPresentation.value
-  ? (runtimeCatalog.value.entries || []) : legacyCatalogEntries.value);
+const catalogEntries = computed(() => {
+  if (hasNewDisplayPresentation.value) return runtimeCatalog.value.entries || [];
+  if (legacyCatalogEntries.value.length) return legacyCatalogEntries.value;
+  if (!isCodePresentation.value) return [];
+  const slots = [...new Set([...slotOrder.value, ...(isBranchTemplate.value ? ['loanRate'] : [])])].filter(slot => !['citySummary','branchTrend'].includes(slot)).map(slot => ({
+    key:slot, slot, kind:'LEGACY_SLOT', label:({depositIncrease:'较上月净增',depositAverage:'月均余额',composition:'业务构成与占比',attention:'流程与经营关注',branches:'辖区机构分布',trend:'主要指标趋势',ranking:'全辖机构对比'})[slot] || presentationLabel(slot),
+    titleEditable:['deposit','loan','customers','revenue','rate','loanRate'].includes(slot),
+    fieldSemantics:(templateSpec(slot)?.fields || []).map(field=>field.semantic),
+    ...(slot==='branches'?{kind:'INSTITUTION_MAP',readOnly:true,titleEditable:false}: {})
+  }));
+  return [...slots,...[
+    ['corporateDeposit','对公存款目标完成率'],['corporateLoan','对公贷款目标完成率'],['corporateRevenue','对公营业收入目标完成率'],['institutionCompletion','辖内机构达标率']
+  ].map(([key,label])=>({key:`leadership-${key}`,label,kind:'READONLY_REGION',readOnly:true,titleEditable:false,visualKind:'COMPLETION',
+    description:key==='institutionCompletion'?'由授权机构排名中的完成率计算，不单独绑定。':'运行页固定目标完成率摘要；读取对应经营模型指标，未提供时显示缺值，不使用其他指标冒充。'}))];
+});
 const drillCatalogEntries = computed(() => {
-  if (!hasNewDisplayPresentation.value || !isBranchTemplate.value) return [];
+  if (!isBranchTemplate.value) return [];
   const slots = new Set(draftComponents.value.map(item => item?.propValue?.bindingKey));
   return [
     { slot: 'citySummary', label: '城市经营汇总', fieldSemantics: ['orgCode', 'cityCode', 'cityName', 'deposit', 'loan', 'customers', 'revenue'] },
@@ -605,13 +661,19 @@ const drillCatalogEntries = computed(() => {
   ].filter(entry => slots.has(entry.slot)).map(entry => ({ ...entry, key: `drill-${entry.slot}`, kind: 'INHERITED_SLOT', titleEditable: false,
     derivedNotes: ['此处配置下钻页面实际使用的数据，主页面组件保持原配置。'] }));
 });
-const selectedCatalogEntry = computed(() => [...catalogEntries.value, ...drillCatalogEntries.value].find(item => item.key === selectedCatalogKey.value)
+const drillConfiguration = computed(() => buildDrillConfigurationCatalog({catalogEntries:catalogEntries.value,draftComponents:draftComponents.value}));
+const selectedCatalogEntry = computed(() => [...catalogEntries.value, ...drillCatalogEntries.value,
+  ...drillConfiguration.value.cityEntries, ...drillConfiguration.value.branchEntries].find(item => item.key === selectedCatalogKey.value)
   || catalogEntries.value[0] || null);
 const selectedComponentSourceMissing = computed(() => hasNewDisplayPresentation.value
-  && Boolean(selectedCatalogEntry.value?.sourceComponentId)
-  && !displayComponents.value.some(entry => entry.component.componentId === selectedCatalogEntry.value.sourceComponentId));
+  && (selectedCatalogEntry.value?.sourceMissing || (Boolean(selectedCatalogEntry.value?.sourceComponentId)
+  && !displayComponents.value.some(entry => entry.component.componentId === selectedCatalogEntry.value.sourceComponentId))));
 const selectedCatalogReadonly = computed(() => selectedComponentSourceMissing.value
-  || ['SYSTEM_METRIC', 'INSTITUTION_MAP'].includes(selectedCatalogEntry.value?.kind));
+  || Boolean(selectedDatasetNotice.value) || selectedCatalogEntry.value?.readOnly || ['SYSTEM_METRIC', 'INSTITUTION_MAP', 'READONLY_REGION'].includes(selectedCatalogEntry.value?.kind));
+const directFieldWorkbench = computed(() => branchThumbnailWorkbench.value && !selectedCatalogReadonly.value
+  && (!hasNewDisplayPresentation.value || selectedCatalogEntry.value?.kind==='INHERITED_SLOT')
+  && (bindingShape(selectedSlot.value,compositionMode.value).blocked
+    || (selectedDatasource.value && selectedDatasource.value.sourceKind !== 'WIDE_TABLE')));
 const periodComparisonConfigurable = computed(() => {
   if (selectedComponentSourceMissing.value) return false;
   const entry = selectedCatalogEntry.value;
@@ -816,7 +878,7 @@ function componentFieldOptions(mapping) {
     || (mapping.kind === 'columns' && dimensionColumns.has(columnKey)) ? 'DIM' : 'METRIC';
   const currentUnit = String(componentMappingItem(mapping)?.unit || selectedDisplayComponent.value?.dataRefs?.[0]?.unit || '');
   const currentKind = unitKindOf(currentUnit);
-  const declared = [...getDatasourceFieldOptions(selectedDatasource.value), ...buildDatasourceFieldOptions(selectedDatasource.value, metricCatalog.value)]
+  const declared = sourceFieldOptions(selectedDatasource.value)
     .filter((option, index, list) => list.findIndex(item => item.col === option.col) === index);
   return declared
     .filter(option => String(option.role || '').toUpperCase() === expectedRole)
@@ -841,6 +903,10 @@ const selectedDatasourceId = computed({
   get: () => selectedBinding.value.dsId ? String(selectedBinding.value.dsId) : '',
   set: value => { selectedBinding.value.dsId = value ? Number(value) : null; }
 });
+function sourceFieldOptions(source = {}) {
+  // 只有宽表指标会透视为独立列；KPI快照中的 metrics 是筛选条件，不是输出列。
+  return [...getDatasourceFieldOptions(source), ...(source?.sourceKind === 'WIDE_TABLE' ? buildDatasourceFieldOptions(source,metricCatalog.value) : [])];
+}
 function fieldOptionsForBinding(slot, semantic, dsId) {
   const fieldSpec = templateSpec(slot)?.fields?.find(item => item.semantic === semantic);
   if (!fieldSpec) return [];
@@ -848,7 +914,10 @@ function fieldOptionsForBinding(slot, semantic, dsId) {
   const expectedRole = fieldSpec.kind === 'dimension' ? 'DIM' : 'METRIC';
   // A date/subject dimension must not become a numeric metric, and a metric
   // must not become a trend axis. Unknown roles fail closed.
-  const options = getDatasourceFieldOptions(source || {})
+  const options = sourceFieldOptions(source || {})
+    .filter((option,index,list)=>list.findIndex(item=>item.col===option.col)===index)
+    .map(option=>({...option,unit:canonicalUnit(option.unit) || option.unit}))
+    .filter(option=>!option.fixedSlot || (option.fixedSlot===slot && semantic==='value'))
     .filter(option => String(option.role || '').toUpperCase() === expectedRole)
     // 来源已声明单位时，不允许把百分比/户数当金额；未声明单位仍保留人工核对入口。
     .filter(option => expectedRole !== 'METRIC' || !fieldSpec.unitKinds?.length || !option.unit
@@ -879,14 +948,50 @@ const hasApplicableFieldOptions = computed(() => {
     : selectedFieldSpecs.value;
   return candidates.some(fieldSpec => fieldOptionsFor(fieldSpec.semantic).length > 0);
 });
+const selectedBindingWarnings = computed(() => {
+  if (!selectedBinding.value?.dsId || selectedCatalogReadonly.value
+      || (hasNewDisplayPresentation.value && selectedCatalogEntry.value?.kind !== 'INHERITED_SLOT')) return [];
+  return selectedFieldSpecs.value.flatMap(field => {
+    const column=selectedBinding.value.fields?.[field.semantic];
+    return column && !fieldOptionsForBinding(selectedSlot.value,field.semantic,selectedBinding.value.dsId).some(option=>option.col===column)
+      ? [`${field.label}：已有字段 ${column} 不在当前来源已确认的同类字段中。`] : [];
+  });
+});
 const canvasVersion = computed(() => canvas.value?.canvasVersion ?? null);
 
 const isCodePresentation = computed(() => canvasStyle.value?.presentation?.type === 'CODE'
   && canvasStyle.value?.presentation?.template === selectedTemplate.value);
 const hasNewDisplayPresentation = computed(() => canvasStyle.value?.presentation?.displaySchemaVersion === 1);
-const branchThumbnailWorkbench = computed(() => hasNewDisplayPresentation.value
-  && selectedTemplate.value === 'branch-overview-v1'
-  && !['CITY', 'BRANCH'].includes(String(screenScope.value.viewLevel || '').toUpperCase()));
+const isCoordinateCanvas = computed(() => screenReady.value && !canvasStyle.value?.presentation);
+const coordinateCanvas = computed(() => ({...canvas.value, canvasStyle:canvasStyle.value, components:draftComponents.value}));
+const useBranchThumbnail = computed(() => hasNewDisplayPresentation.value && selectedTemplate.value === 'branch-overview-v1');
+const branchThumbnailWorkbench = computed(() => screenReady.value && (isCoordinateCanvas.value || isCodePresentation.value));
+const canInspectDrillPages = computed(() => useBranchThumbnail.value && screenScope.value.viewLevel === 'PROVINCE');
+const configurationContexts = [{key:'screen',label:'当前大屏'},{key:'city',label:'城市下钻页'},{key:'branch',label:'支行下钻页'}];
+const thumbnailEntries = computed(() => {
+  const entries = configurationContext.value === 'city' ? drillConfiguration.value.cityEntries
+    : configurationContext.value === 'branch' ? drillConfiguration.value.branchEntries.filter(entry=>!entry.auxiliary) : catalogEntries.value;
+  return entries.map(entry => ({...entry, displayLabel:entry.titleEditable ? catalogDisplayLabel(entry) : undefined,
+    label:entry.kind === 'LEGACY_COMPONENT' && entry.titleEditable ? catalogDisplayLabel(entry) : entry.visualLabel || entry.label}));
+});
+const thumbnailSelectedKey = computed(() => configurationContext.value === 'branch'
+  ? drillConfiguration.value.branchEntries.find(entry=>entry.parentKey===selectedCatalogKey.value)?.key || selectedCatalogKey.value : selectedCatalogKey.value);
+const thumbnailTitle = computed(() => configurationContext.value === 'city' ? '城市经营总览'
+  : configurationContext.value === 'branch' ? '支行经营总览' : activeScreenName.value);
+
+function changeConfigurationContext(context) {
+  if (writing.value || loading.value) return;
+  configurationContext.value = context;
+  const entry=thumbnailEntries.value[0]; if(entry) selectThumbnailEntry(entry);
+}
+function selectThumbnailEntry(entry) {
+  selectCatalogEntry(entry.kind === 'LINKED_COMPONENT' ? entry.sourceEntry : entry);
+}
+async function handleCoordinateSaved(response) { emit('saved',response); await loadCanvas(activeScreenId.value); }
+function previewCoordinate() {
+  const screenCode=activeScreen.value?.screenCode || activeScreen.value?.screen_code;
+  if(screenCode && !hasLocalChanges.value && !writing.value) router.push({name:'ScreenView',params:{screenCode},query:{preview:'draft'}});
+}
 
 // 迁移候选识别不复用 isCodePresentation：旧 CODE 包本身也可能没有新展示子协议。
 const malformedLegacyDraft = computed(() => {
@@ -944,7 +1049,7 @@ function catalogKindLabel(entry = {}) {
 
 function catalogDisplayLabel(entry) {
   if (!entry) return '';
-  if (entry.kind === 'LEGACY_COMPONENT' && entry.titleEditable) {
+  if (['LEGACY_COMPONENT','LEGACY_SLOT'].includes(entry.kind) && entry.titleEditable) {
     return resolveConfiguredMetricLabel(canvasStyle.value, entry.slot, entry.label);
   }
   const sourceId = String(entry.sourceComponentId || '');
@@ -954,6 +1059,8 @@ function catalogDisplayLabel(entry) {
 }
 
 const componentTitle = computed(() => {
+  if (selectedCatalogEntry.value?.titleEditable === false) return selectedCatalogEntry.value.label || '';
+  if (['READONLY_REGION','INHERITED_SLOT'].includes(selectedCatalogEntry.value?.kind)) return selectedCatalogEntry.value.label || '';
   if (hasNewDisplayPresentation.value && selectedCatalogEntry.value?.kind === 'DERIVED_TOTAL') {
     return resolveConfiguredMetricLabel(canvasStyle.value, selectedCatalogEntry.value.slot, '');
   }
@@ -969,6 +1076,7 @@ const componentTitle = computed(() => {
 });
 
 const componentDefaultTitle = computed(() => {
+  if (['READONLY_REGION','INHERITED_SLOT'].includes(selectedCatalogEntry.value?.kind)) return selectedCatalogEntry.value.label || '';
   if (hasNewDisplayPresentation.value && selectedCatalogEntry.value) {
     if (['DERIVED_TOTAL', 'COMPOSITION_TAB', 'SYSTEM_METRIC', 'INSTITUTION_MAP', 'BUSINESS_GROWTH', 'INSTITUTION_RANKING'].includes(selectedCatalogEntry.value.kind)) {
       return selectedCatalogEntry.value.label;
@@ -1585,6 +1693,8 @@ function clearPublishState() {
 }
 
 function clearCanvasState() {
+  configurationContext.value = 'screen';
+  legacyBusy.value = false;
   canvas.value = null;
   canvasStyle.value = {};
   draftComponents.value = [];
@@ -1993,6 +2103,17 @@ function collectValidBindings() {
       candidate = { ...candidate, fields: Object.fromEntries(Object.entries(candidate.fields || {}).filter(([key]) => identities.has(key))), units: {} };
     }
     if (!candidate || !candidate.dsId) continue;
+    const dedicatedSource=datasources.value.find(item=>String(item.id)===String(candidate.dsId));
+    if (getDatasourceFieldOptions(dedicatedSource || {}).some(option=>option.role==='NOTICE')) {
+      const original=draftComponents.value.find(component=>component?.propValue?.bindingKey===slot);
+      const baseline=normalizeBinding(parse(original?.bindJson,{}),slot);
+      const line=String(dedicatedSource?.bizLine || dedicatedSource?.biz_line || '').toUpperCase();
+      const validDataset=isCodePresentation.value && canvasStyle.value.dataClassification==='TEST'
+        && ['CORP','COMMON'].includes(line) && !isRetailTemplate.value && (!isCorporateTemplate.value || line==='CORP');
+      if (validDataset && original && JSON.stringify(normalizeBinding(candidate,slot))===JSON.stringify(baseline)) next[slot]=baseline;
+      else problems.push(`${presentationLabel(slot)}：专用经营数据集不接受通用字段重映射，请使用专用维护入口`);
+      continue;
+    }
     if (isRetailTemplate.value) {
       const source = datasources.value.find(item => String(item.id) === String(candidate.dsId));
       if (String(source?.bizLine || source?.biz_line || '').toUpperCase() !== 'RETAIL') {
@@ -2047,7 +2168,7 @@ function displayUnitLabel(unit) {
 }
 
 function unitKindOf(unit) {
-  const value = String(unit || '').toUpperCase();
+  const value = canonicalUnit(unit) || String(unit || '').toUpperCase();
   if (['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION'].includes(value)) return 'AMOUNT';
   if (['COUNT', 'TEN_THOUSAND_COUNT'].includes(value)) return 'COUNT';
   if (['PERCENT', 'RATIO'].includes(value)) return 'RATIO';
@@ -2100,6 +2221,7 @@ function writeIsCurrent(targetId, token) {
 }
 
 async function saveDraft(options = {}) {
+  if (isCoordinateCanvas.value) return false;
   if (writing.value) return false;
   const targetId = screenIdValue(options.targetId ?? activeScreenId.value);
   const token = options.generation ?? loadGeneration;
@@ -2291,6 +2413,10 @@ defineExpose({
 .panorama-bindings--visual .panorama-bindings__workbench > [data-testid="business-test-notice"] { padding:0 2px; margin:0 0 12px; color:#78879c; }
 .panorama-bindings--visual .panorama-bindings__body { padding:0; align-items:start; }
 .panorama-bindings__preview-column { min-width:0; position:sticky; top:16px; }
+.panorama-bindings__context-tabs { display:flex; gap:6px; padding:0 0 10px; }
+.panorama-bindings__context-tabs button { flex:1; padding:9px 8px; border:1px solid #dfe7f2; border-radius:4px; background:#fff; color:#65758f; font:inherit; cursor:pointer; }
+.panorama-bindings__context-tabs button[aria-pressed="true"] { border-color:#2d63dc; color:#2d63dc; background:#edf3ff; font-weight:600; }
+.panorama-bindings__context-tabs button:focus-visible { outline:2px solid #82a7f0; outline-offset:2px; }
 .panorama-bindings--visual .panorama-bindings__editor { padding:20px; border:1px solid #e1e9f4; border-radius:6px; background:#fff; min-height:650px; }
 .panorama-bindings__configuration-heading { margin:0 0 12px; color:#172339; font-size:21px; line-height:28px; font-weight:700; }
 .panorama-bindings--visual .panorama-bindings__editor-head { padding-bottom:12px; border-bottom:1px solid #e9eef6; }
@@ -2305,6 +2431,12 @@ defineExpose({
 .panorama-bindings__basic-grid .panorama-bindings__comparison-mode { padding:0; margin:0; border:0; background:none; }
 .panorama-bindings__basic-grid .panorama-bindings__comparison-select { height:39px; border-color:#dbe4f0; font:inherit; }
 .panorama-bindings__period-field select { width:100%; height:39px; padding:0 10px; border:1px solid #dbe4f0; border-radius:4px; background:#fff; color:#37465d; font:inherit; }
+.panorama-bindings__direct-fields { margin-top:20px; padding-top:14px; border-top:1px solid #e6edf5; }
+.panorama-bindings__direct-fields h3 { margin:0; font-size:17px; }
+.panorama-bindings__direct-head { display:grid; grid-template-columns:minmax(95px,.8fr) minmax(0,1.8fr) minmax(90px,.8fr); gap:8px; background:#f1f6fc; margin-top:12px; padding:10px; color:#64748b; font-size:12px; }
+.panorama-bindings__direct-fields .panorama-bindings__field-row { grid-template-columns:minmax(95px,.8fr) minmax(0,1.8fr) minmax(90px,.8fr); border:1px solid #e4ebf5; border-top:0; padding:9px; margin:0; }
+.panorama-bindings__direct-fields label { min-width:0; overflow-wrap:anywhere; font-size:13px; }
+@media(max-width:600px) { .panorama-bindings__direct-head { display:none; } .panorama-bindings__direct-fields .panorama-bindings__field-row { grid-template-columns:1fr; margin-top:8px; border-top:1px solid #e4ebf5; } }
 .panorama-bindings--visual .panorama-bindings__advanced { padding:13px 14px; border:1px solid #e1e9f4; border-radius:5px; margin:18px 0 10px; background:#f8faff; }
 .panorama-bindings--visual .panorama-bindings__advanced > summary { cursor:pointer; font-size:14px; font-weight:500; color:#40516d; }
 .panorama-bindings--visual .panorama-bindings__advanced[open] > summary { margin-bottom:12px; }

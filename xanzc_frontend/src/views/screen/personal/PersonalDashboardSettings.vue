@@ -23,13 +23,25 @@
       <p class="hint">新屏默认没有查看权限，请在现有角色管理中授权。</p>
     </template>
     <form v-else-if="screen && canvas" @submit.prevent="save">
-      <fieldset :disabled="loading || saving || publishing || accessVisible">
-        <label>标题 <input v-model="settings.title" /></label>
-        <label>指标区标题 <input v-model="settings.metricsTitle" /></label>
-        <label>趋势区标题 <input v-model="settings.trendTitle" /></label>
-        <label>机构贡献标题 <input v-model="settings.shareTitle" /></label>
-        <label>目标完成标题 <input v-model="settings.completionTitle" /></label>
-        <label
+      <div class="personal-workbench">
+        <aside class="personal-workbench__preview">
+          <h3>页面缩略图</h3>
+          <p class="hint">点击页面中的区域进行配置。</p>
+          <PersonalConfigThumbnail :settings="settings" :selected-key="selectedConfigKey" :disabled="loading || saving || publishing || accessVisible" @select="selectConfig" />
+          <p class="personal-workbench__caption">标题实时展示 · 数据仅为占位</p>
+        </aside>
+        <section class="personal-workbench__editor">
+          <div class="personal-workbench__editor-heading">
+            <div><h3>配置信息</h3><p>当前定位：<strong>{{ selectedConfigLabel }}</strong></p></div>
+            <span class="personal-workbench__source">个人驾驶舱配置</span>
+          </div>
+          <fieldset :disabled="loading || saving || publishing || accessVisible">
+        <label v-show="selectedConfigKey === 'page-title'">标题 <input v-model="settings.title" /></label>
+        <label v-show="selectedConfigKey === 'page-title'">指标区标题 <input v-model="settings.metricsTitle" /></label>
+        <label v-show="selectedConfigKey === 'page-title'">趋势区标题 <input v-model="settings.trendTitle" /></label>
+        <label v-show="selectedConfigKey === 'page-title'">机构贡献标题 <input v-model="settings.shareTitle" /></label>
+        <label v-show="selectedConfigKey === 'page-title'">目标完成标题 <input v-model="settings.completionTitle" /></label>
+        <label v-show="selectedConfigKey === 'page-title'"
           >默认范围
           <select v-model="settings.defaultRange">
             <option value="7d">近7日</option>
@@ -37,18 +49,36 @@
             <option value="1y">近一年</option>
           </select></label
         >
+        <div v-if="selectedConfigKey === 'metrics'" class="personal-region-editor" data-testid="personal-region-editor-metrics">
+          <label>指标区标题 <input v-model="settings.metricsTitle" /></label>
+        </div>
+        <div v-if="selectedConfigKey === 'trend'" class="personal-region-editor" data-testid="personal-region-editor-trend">
+          <label>趋势区标题 <input v-model="settings.trendTitle" /></label>
+          <label>默认范围 <select v-model="settings.defaultRange"><option value="7d">近7日</option><option value="6m">近6月</option><option value="1y">近一年</option></select></label>
+          <div class="binding-summary"><strong>历史趋势</strong><span v-for="metric in settings.metrics" :key="`trend-${metric._key}`">{{ metric.metricName || metric.metricCode || '未命名' }}：{{ metric.bindings.history?.valueField || '值字段未配置' }} / {{ metric.bindings.history?.dateField || '日期字段未配置' }}</span></div>
+        </div>
+        <div v-if="selectedConfigKey === 'organization'" class="personal-region-editor" data-testid="personal-region-editor-organization">
+          <label>机构贡献标题 <input v-model="settings.shareTitle" /></label>
+          <div class="binding-summary"><strong>当前值 + 机构贡献</strong><span v-for="metric in settings.metrics" :key="`org-${metric._key}`">{{ metric.metricName || metric.metricCode || '未命名' }}：当前值 {{ metric.bindings.current?.valueField || '未配置' }}；机构贡献 {{ metric.bindings.organization?.valueField || '未配置' }}</span></div>
+        </div>
+        <div v-if="selectedConfigKey === 'target'" class="personal-region-editor" data-testid="personal-region-editor-target">
+          <label>目标完成标题 <input v-model="settings.completionTitle" /></label>
+          <div class="binding-summary"><strong>当前值 + 目标值</strong><span v-for="metric in settings.metrics" :key="`target-${metric._key}`">{{ metric.metricName || metric.metricCode || '未命名' }}：当前值 {{ metric.bindings.current?.valueField || '未配置' }}；目标值 {{ metric.bindings.target?.valueField || '未配置' }}</span></div>
+        </div>
+        <template v-for="(metric, index) in settings.metrics" :key="metric._key">
         <div
-          v-for="(metric, index) in settings.metrics"
-          :key="metric._key"
+          v-show="selectedConfigKey === 'metrics' || selectedConfigKey === `metric-${metric._key || metric.metricCode || index}` || ['trend', 'organization', 'target'].includes(selectedConfigKey)"
           :data-testid="`personal-metric-${index}`"
+          :data-config-key="`metric-${metric.metricCode || metric._key || index}`"
+          :class="{ 'is-config-selected': selectedConfigKey === `metric-${metric._key || metric.metricCode || index}` }"
           class="metric"
         >
           <h3>指标 {{ index + 1 }}</h3>
-          <label>编码 <input v-model="metric.metricCode" /></label
-          ><label>名称 <input v-model="metric.metricName" /></label>
-          <label>单位 <input v-model="metric.unit" /></label
-          ><label>颜色 <input v-model="metric.color" type="color" /></label>
-          <div v-for="kind in bindingKinds" :key="kind" class="binding">
+          <label v-show="selectedConfigKey === 'metrics' || selectedConfigKey.startsWith('metric-')">编码 <input v-model="metric.metricCode" /></label
+          ><label v-show="selectedConfigKey === 'metrics' || selectedConfigKey.startsWith('metric-')">名称 <input v-model="metric.metricName" /></label>
+          <label v-show="selectedConfigKey === 'metrics' || selectedConfigKey.startsWith('metric-')">单位 <input v-model="metric.unit" /></label
+          ><label v-show="selectedConfigKey === 'metrics' || selectedConfigKey.startsWith('metric-')">颜色 <input v-model="metric.color" type="color" /></label>
+          <div v-for="kind in bindingKindsFor(selectedConfigKey)" :key="kind" class="binding">
             <strong>{{ bindingLabels[kind] }}</strong>
             <label
               >数据来源<select v-model="metric.bindings[kind].dsId">
@@ -87,10 +117,10 @@
               />
             </datalist>
           </div>
-          <button type="button" @click="removeMetric(index)">删除指标</button>
-          <button v-if="index" type="button" @click="moveMetric(index, -1)">
+          <button v-show="selectedConfigKey === 'metrics' || selectedConfigKey.startsWith('metric-')" type="button" @click="removeMetric(index)">删除指标</button>
+          <button v-show="selectedConfigKey === 'metrics' || selectedConfigKey.startsWith('metric-')" v-if="index" type="button" @click="moveMetric(index, -1)">
             上移</button
-          ><button
+          ><button v-show="selectedConfigKey === 'metrics' || selectedConfigKey.startsWith('metric-')"
             v-if="index < settings.metrics.length - 1"
             type="button"
             @click="moveMetric(index, 1)"
@@ -98,6 +128,7 @@
             下移
           </button>
         </div>
+        </template>
         <button
           type="button"
           data-testid="personal-add-metric"
@@ -136,7 +167,9 @@
         <button type="button" :disabled="dirty" @click="accessVisible = true">
           查看角色设置
         </button>
-      </fieldset>
+          </fieldset>
+        </section>
+      </div>
     </form>
     <PanoramaSettings
       v-if="accessVisible"
@@ -159,6 +192,7 @@ import {
 } from "vue";
 import { useRouter } from "vue-router";
 import { usePermissionStore } from "@/stores/permission";
+import PersonalConfigThumbnail from './PersonalConfigThumbnail.vue';
 import {
   getScreenCanvas,
   listScreenDatasources,
@@ -216,6 +250,13 @@ const bindingLabels = {
   organization: "机构对比",
   target: "目标值",
 };
+const selectedConfigKey = ref("metrics");
+const selectedConfigLabel = computed(() => {
+  const labels = { "page-title": settings.title || "个人经营驾驶舱", metrics: settings.metricsTitle || "核心指标", trend: settings.trendTitle || "指标趋势", organization: settings.shareTitle || "机构贡献", target: settings.completionTitle || "目标完成度" };
+  if (labels[selectedConfigKey.value]) return labels[selectedConfigKey.value];
+  const metric = settings.metrics.find((item) => `metric-${item._key || item.metricCode}` === selectedConfigKey.value);
+  return metric ? `指标：${metric.metricName || metric.metricCode || "未命名"}` : "全局设置";
+});
 const validationErrors = computed(() => validatePersonalSettings(settings));
 const accessScreen = computed(() => ({
   ...screen.value,
@@ -264,11 +305,26 @@ function current(token) {
   return !disposed && props.visible && token === generation.value;
 }
 function addMetric() {
-  settings.metrics.push(blankMetric());
+  const metric = blankMetric();
+  settings.metrics.push(metric);
+  selectedConfigKey.value = `metric-${metric._key}`;
   dirty.value = true;
 }
+function selectConfig(key) {
+  selectedConfigKey.value = key || "page-title";
+}
+function bindingKindsFor(key) {
+  if (key === 'trend') return ['history'];
+  if (key === 'organization') return ['current', 'organization'];
+  if (key === 'target') return ['current', 'target'];
+  return bindingKinds;
+}
 function removeMetric(index) {
+  const removed = settings.metrics[index];
   settings.metrics.splice(index, 1);
+  if (removed && selectedConfigKey.value === `metric-${removed._key}`) {
+    selectedConfigKey.value = settings.metrics.length ? "metrics" : "page-title";
+  }
   dirty.value = true;
 }
 function moveMetric(index, delta) {
@@ -510,6 +566,10 @@ async function save() {
       components: buildPersonalComponents(settings, canvas.value.components),
     };
     const sentSettings = settingsSnapshot();
+    const selectedMetric = selectedConfigKey.value.startsWith('metric-')
+      ? settings.metrics.find((metric) => `metric-${metric._key}` === selectedConfigKey.value)
+      : null;
+    const selectedMetricCode = selectedMetric?.metricCode || '';
     const response = await saveScreenCanvas(payload);
     if (!current(token)) return false;
     const reread = parseCanvasResponse(await getScreenCanvas(screenId));
@@ -528,6 +588,10 @@ async function save() {
       throw new Error("保存后回读未确认配置内容或版本，草稿仍保留");
     canvas.value = reread;
     reset(rereadSettings);
+    if (selectedMetricCode) {
+      const rereadMetric = settings.metrics.find((metric) => metric.metricCode === selectedMetricCode);
+      selectedConfigKey.value = rereadMetric ? `metric-${rereadMetric._key}` : (settings.metrics.length ? 'metrics' : 'page-title');
+    }
     baseline.value = settingsSnapshot();
     dirty.value = false;
     emit("saved", { action: "canvas", response, canvas: reread });
@@ -600,7 +664,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .personal-dashboard-settings {
-  max-width: 1180px;
+  max-width: 1560px;
   margin: 0 auto;
   padding: 24px;
   color: #24344d;
@@ -609,6 +673,23 @@ onBeforeUnmount(() => {
   border-radius: 12px;
   box-sizing: border-box;
 }
+.personal-workbench { display:grid; grid-template-columns:minmax(360px,48fr) minmax(0,52fr); gap:16px; align-items:start; }
+.personal-workbench__preview,.personal-workbench__editor { min-width:0; padding:20px; background:#fff; border:1px solid #d9e1ee; border-radius:8px; box-sizing:border-box; }
+.personal-workbench__preview { background:#fff; }
+.personal-workbench__preview h3,.personal-workbench__editor-heading h3 { margin:0; color:#182b49; font-size:20px; }
+.personal-workbench__preview > .hint { margin:6px 0 14px; }
+.personal-workbench__caption { margin:10px 0 0; color:#7184a0; font-size:12px; }
+.personal-workbench__editor-heading { display:flex; justify-content:space-between; gap:12px; align-items:start; padding-bottom:14px; border-bottom:1px solid #e1e8f1; }
+.personal-workbench__editor-heading p { margin:6px 0 0; color:#61738d; font-size:13px; }
+.personal-workbench__editor-heading strong { color:#1464c2; }
+.personal-workbench__source { color:#078d7f; font-size:12px; white-space:nowrap; }
+.personal-workbench__editor fieldset { margin-top:16px; }
+.metric.is-config-selected { border-color:#12bfe4; box-shadow:0 0 0 2px #12bfe433; }
+.personal-region-editor { display:grid; gap:10px; margin-bottom:12px; padding:12px; border:1px solid #d7e2ef; border-radius:6px; background:#f8fbff; }
+.binding-summary { display:grid; gap:6px; color:#526986; font-size:12px; }
+.binding-summary strong { color:#1a4774; }
+.binding-summary span { padding:6px 8px; border:1px solid #d9e4f0; border-radius:4px; background:#fff; overflow-wrap:anywhere; }
+@media(max-width:960px) { .personal-workbench { grid-template-columns:1fr; } }
 .personal-dashboard-settings header {
   display: flex;
   justify-content: space-between;

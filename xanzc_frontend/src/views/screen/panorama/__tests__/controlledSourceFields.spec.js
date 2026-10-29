@@ -23,6 +23,14 @@ function m98Source(overrides = {}) {
 }
 
 describe('controlledSourceFields', () => {
+  it('机构组KPI快照按查询引擎真实英文列返回，不套用个人快照中文列', () => {
+    const source={sourceKind:'KPI_DETAIL',dsType:'SINGLE',configJson:JSON.stringify({schemaVersion:2,scopeMode:'NAMED_GROUP',subjectType:'ORG',mode:'SNAPSHOT',schemeCode:'QA'})};
+    const fields=getControlledSourceFieldOptions(source);
+    expect(fields.map(field=>field.col)).toEqual(['org_code','org_name','data_date','metric_code','metric_name','actual_value','target_value','weight','score','completion_rate','gap','attention_label','attention_count']);
+    expect(fields.find(field=>field.col==='attention_count')).toMatchObject({role:'METRIC',unit:'COUNT'});
+    expect(fields.find(field=>field.col==='attention_label')).toMatchObject({role:'DIM'});
+    expect(getControlledSourceFieldOptions({...source,dsType:'TIMESERIES'})).toEqual([]);
+  });
   it('唯一声明 M98 profile、固定槽位、输出字段和无猜测原始单位', () => {
     expect(M98_PROFILE_DEFINITIONS.CORP_REVENUE).toMatchObject({
       slot: 'corpRevenue',

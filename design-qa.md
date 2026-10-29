@@ -1,3 +1,17 @@
+# 全部大屏配置工作台扩展验收（2026-10-29）
+
+final result: passed within documented scope
+
+沿用用户确认的分行深蓝缩略图、青色选中框、占位图表与右侧宽配置区。对公/零售保留真实模板分区及共享卡片；坐标画布按实际坐标和组件类型缩放；个人驾驶舱提供指标、趋势、机构和目标入口。真实标题完整显示，缩略图没有业务数值。
+
+- 视觉检查：real-9101至9106的1586/1366/900/390截图；real-drill-city.png、real-drill-branch.png及personal-mock.png。地图为示意素材，选择按配置区域反馈。
+- 修复：无效通用来源字段、城市完成率缺项、支行员工排名错用机构来源、旧组件参数优先级、固定标题可编辑但运行无效、专用数据集误作普通字段、保存异常清空编辑等问题。
+- 主代理独立验证：前端257项、Java54项、前后端构建通过；六屏82入口与下钻35区域真实只读CLI核对。最终console无error/warning，真实会话无mock。
+- 保存重载仅在隔离mock浏览器验证，不等于真实持久化验收。当前无真实PERSONAL_COCKPIT实例；未生成、保存或发布真实业务配置。数据缺失继续明确显示。
+- 逐项矩阵见docs/reports/all-screen-workbench-20261029.md；原始证据在E:/cx-workspace/runtime/all-screen-workbench-20261029/。
+
+---
+
 # 分行配置工作台第二轮视觉返修
 
 final result: passed

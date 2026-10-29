@@ -37,6 +37,7 @@ function token(value) {
   return text(value).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
 }
 
+/** 把已声明的展示单位别名规范化；未知单位保持不可识别，不猜测量纲。 */
 function canonicalUnit(value) {
   const raw = text(value);
   return UNIT_ALIASES[raw] || UNIT_ALIASES[raw.toUpperCase()] || null;

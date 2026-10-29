@@ -27,6 +27,37 @@ const canvas = {
 };
 
 describe('PanoramaBindings legacy catalog', () => {
+  it('机构KPI快照的指标筛选项不是输出列，不能混进字段候选', async () => {
+    api.listScreens.mockResolvedValue([{id:1,screenCode:'SCR_CORP',screenName:'对公',bizLine:'CORP',viewLevel:'PROVINCE'}]);
+    api.getScreenCanvas.mockResolvedValue({...canvas,canvasDraftJson:JSON.stringify({components:[{id:'target',component:'ChartWidget',blockId:11,innerType:'TABLE_LIST',propValue:{bindingKey:'corpTargets'},bindJson:JSON.stringify({dsId:7,period:'LATEST',fields:{name:'org_name',actual:'actual_value',target:'target_value'},units:{actual:'YUAN',target:'YUAN'}})}]})});
+    api.listScreenDatasources.mockResolvedValue([{id:7,dsName:'机构快照',status:'ACTIVE',bizLine:'CORP',sourceKind:'KPI_DETAIL',dsType:'SINGLE',configJson:JSON.stringify({schemaVersion:2,scopeMode:'NAMED_GROUP',subjectType:'ORG',mode:'SNAPSHOT',schemeCode:'QA',metrics:[{metricCode:'M_1',metricName:'不是返回列'}]})}]);
+    api.listScreenMetricCatalog.mockResolvedValue([]);
+    const wrapper=mount(PanoramaBindings,{props:{screenId:1},global:{directives:{'bp-overflow-tooltip':{}},stubs:{'el-button':true,'el-dialog':true}}});
+    await vi.waitFor(()=>expect(wrapper.find('[data-config-key="corpTargets"]').exists()).toBe(true));await wrapper.get('[data-config-key="corpTargets"]').trigger('click');
+    const field=wrapper.get('[data-testid="field-option-corpTargets-actual"]');
+    expect(field.find('option[value="actual_value"]').exists()).toBe(true);expect(field.find('option[value="不是返回列"]').exists()).toBe(false);wrapper.unmount();
+  });
+  it.each([['元','YUAN','corpDeposit'],['万元','TEN_THOUSAND','corpDeposit'],['亿元','HUNDRED_MILLION','corpDeposit'],['%','PERCENT','corpNplRate'],['比例','RATIO','corpNplRate']])('来源单位 %s 与绑定编码一致时可回显并通过保存校验', async (alias,unit,slot) => {
+    api.listScreens.mockResolvedValue([{id:1,screenCode:'SCR_CORP',screenName:'对公',bizLine:'CORP',viewLevel:'PROVINCE'}]);
+    api.getScreenCanvas.mockResolvedValue({...canvas,canvasDraftJson:JSON.stringify({components:[{id:'metric',component:'ChartWidget',blockId:11,innerType:'METRIC_CARD',propValue:{bindingKey:slot},bindJson:JSON.stringify({dsId:7,period:'LATEST',fields:{value:'amount'},units:{value:unit}})}]})});
+    api.listScreenDatasources.mockResolvedValue([{id:7,dsName:'来源',status:'ACTIVE',bizLine:'CORP',sourceKind:'WIDE_TABLE',configJson:JSON.stringify({table:'ORG_INDEX_RESULT',fieldMeta:[{col:'amount',role:'METRIC',unit:alias}]})}]);
+    api.listScreenMetricCatalog.mockResolvedValue([]);
+    const wrapper=mount(PanoramaBindings,{props:{screenId:1},global:{directives:{'bp-overflow-tooltip':{}},stubs:{'el-button':true,'el-dialog':true}}});
+    await vi.waitFor(()=>expect(wrapper.find(`[data-config-key="${slot}"]`).exists()).toBe(true));await wrapper.get(`[data-config-key="${slot}"]`).trigger('click');
+    expect(wrapper.get(`[data-testid="field-option-${slot}-value"] option[value="amount"]`).attributes('disabled')).toBeUndefined();
+    expect(wrapper.vm.collectValidBindings().problems).toEqual([]);wrapper.unmount();
+  });
+  it('仅声明指标编码的宽表来源也按已确认目录列名回显已有绑定', async () => {
+    api.listScreens.mockResolvedValue([{id:1,screenCode:'SCR_CORP',screenName:'对公',bizLine:'CORP',viewLevel:'PROVINCE'}]);
+    api.getScreenCanvas.mockResolvedValue(canvas);
+    api.listScreenDatasources.mockResolvedValue([{id:7,dsName:'既有指标来源',status:'ACTIVE',bizLine:'CORP',sourceKind:'WIDE_TABLE',configJson:JSON.stringify({table:'ORG_INDEX_RESULT',metrics:[{metricCode:'M_AMOUNT'}]})}]);
+    api.listScreenMetricCatalog.mockResolvedValue([{metricCode:'M_AMOUNT',metricName:'存款',outputColumn:'old_value',unit:'YUAN',baseDim:'ORG',bindable:true}]);
+    const wrapper=mount(PanoramaBindings,{props:{screenId:1},global:{directives:{'bp-overflow-tooltip':{}},stubs:{'el-button':true,'el-dialog':true}}});
+    await vi.waitFor(()=>expect(wrapper.find('[data-testid="field-option-corpDeposit-value"]').exists()).toBe(true));
+    expect(wrapper.get('[data-testid="field-option-corpDeposit-value"]').element.value).toBe('old_value');
+    expect(wrapper.get('[data-testid="field-option-corpDeposit-value"] option[value="old_value"]').attributes('disabled')).toBeUndefined();
+    wrapper.unmount();api.listScreenMetricCatalog.mockResolvedValue([]);
+  });
   it('渲染对公实际目录，应用计划合并旧字段并保存后可回读', async () => {
     api.listScreens.mockResolvedValue([{ id: 1, screenCode: 'SCR_CORP', screenName: '对公', bizLine: 'CORP', viewLevel: 'PROVINCE' },
       { id: 2, screenCode: 'SCR_OTHER', screenName: '另一张对公屏', bizLine: 'CORP', viewLevel: 'PROVINCE' }]);
@@ -40,6 +71,8 @@ describe('PanoramaBindings legacy catalog', () => {
       directives: { 'bp-overflow-tooltip': {} }
     } });
     await vi.waitFor(() => expect(wrapper.find('[data-config-key="corpDeposit"]').exists()).toBe(true));
+    expect(wrapper.find('[data-testid="operating-config-thumbnail"]').exists()).toBe(true);
+    expect(wrapper.find('.panorama-bindings__slots').exists()).toBe(false);
     expect(wrapper.find('[data-config-key="corpSegments"]').exists()).toBe(true);
     await wrapper.get('[data-config-key="corpDeposit"]').trigger('click');
     expect(wrapper.find('[data-testid="field-option-corpDeposit-value"]').exists()).toBe(true);

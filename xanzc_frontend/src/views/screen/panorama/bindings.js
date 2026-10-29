@@ -167,7 +167,13 @@ export const BINDING_SLOTS = Object.freeze({
       field('loan', '贷款余额', { unitKinds: amountUnits }),
       field('customers', '营销有效归属客户数', { unitKinds: countUnits }),
       field('target', '目标值', { unitKinds: amountUnits }),
-      field('rate', '完成率', { unitKinds: ratioUnits })
+      field('rate', '完成率', { unitKinds: ratioUnits }),
+      field('retailDepositRate', '零售存款完成率', { unitKinds: ratioUnits }),
+      field('retailLoanRate', '零售贷款完成率', { unitKinds: ratioUnits }),
+      field('retailNplRate', '零售不良率', { unitKinds: ratioUnits }),
+      field('corpDepositRate', '对公存款完成率', { unitKinds: ratioUnits }),
+      field('corpLoanRate', '对公贷款完成率', { unitKinds: ratioUnits }),
+      field('corpNplRate', '对公不良率', { unitKinds: ratioUnits })
     ])
   }),
   branchTrend: Object.freeze({
@@ -188,7 +194,9 @@ export const BINDING_SLOTS = Object.freeze({
     innerType: 'TABLE_LIST',
     required: [],
     oneOfRequired: ['cityCode', 'orgCode'],
-    atLeastOneOf: ['deposit', 'loan', 'customers', 'revenue', 'rate'],
+    atLeastOneOf: ['deposit', 'loan', 'customers', 'revenue', 'rate',
+      'corpDeposit', 'retailDeposit', 'corpLoan', 'retailLoan', 'intermediaryIncome', 'settlementDeposit',
+      'retailDepositRate', 'retailLoanRate', 'corpDepositRate', 'corpLoanRate'],
     fields: Object.freeze([
       field('orgCode', '机构号', { kind: 'dimension' }),
       field('cityCode', '城市编码', { kind: 'dimension' }),
@@ -197,7 +205,17 @@ export const BINDING_SLOTS = Object.freeze({
       field('loan', '贷款余额', { unitKinds: amountUnits }),
       field('customers', '营销有效归属客户数', { unitKinds: countUnits }),
       field('revenue', '手工测试收入', { unitKinds: amountUnits }),
-      field('rate', '完成率', { unitKinds: ratioUnits })
+      field('rate', '完成率', { unitKinds: ratioUnits }),
+      field('corpDeposit', '对公存款', { unitKinds: amountUnits }),
+      field('retailDeposit', '零售存款', { unitKinds: amountUnits }),
+      field('corpLoan', '对公贷款', { unitKinds: amountUnits }),
+      field('retailLoan', '零售贷款', { unitKinds: amountUnits }),
+      field('intermediaryIncome', '中间业务收入', { unitKinds: amountUnits }),
+      field('settlementDeposit', '结算性存款', { unitKinds: amountUnits }),
+      field('retailDepositRate', '零售存款完成率', { unitKinds: ratioUnits }),
+      field('retailLoanRate', '零售贷款完成率', { unitKinds: ratioUnits }),
+      field('corpDepositRate', '对公存款完成率', { unitKinds: ratioUnits }),
+      field('corpLoanRate', '对公贷款完成率', { unitKinds: ratioUnits })
     ])
   }),
   // loanRate is an optional independent ratio card. It must never be inferred
@@ -420,6 +438,7 @@ export function getDatasourceFieldOptions(datasource = {}) {
   for (const item of Array.isArray(config?.metrics) ? config.metrics : []) add(item);
 
   const controlled = getControlledSourceFieldOptions(datasource);
+  if (String(datasource.sourceKind || '').toUpperCase()==='KPI_DETAIL' && config?.scopeMode==='NAMED_GROUP') return controlled;
   if (controlled.some(item => item?.role === 'NOTICE')) return controlled;
   controlled.forEach(item => add(item, item.role || 'METRIC'));
 
@@ -448,7 +467,7 @@ export function getDatasourceFieldOptions(datasource = {}) {
     }
   } else if (sourceKind === 'KPI_RESULT') {
     addDimension('data_date', '数据日期');
-    addDimension('KPI总分', 'KPI总分');
+    add({col:'KPI总分',alias:'KPI总分',role:'METRIC',builtin:true});
   } else if (sourceKind === 'KPI_DETAIL') {
     const mode = String(config?.mode || '').toUpperCase();
     if (mode === 'SNAPSHOT') {

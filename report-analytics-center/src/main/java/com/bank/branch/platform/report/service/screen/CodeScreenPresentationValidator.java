@@ -362,7 +362,10 @@ public final class CodeScreenPresentationValidator {
             throw invalid();
         }
         if ("citySummary".equals(bindingKey)
-                && present.stream().noneMatch(Set.of("deposit", "loan", "customers", "revenue", "rate")::contains)) {
+                && present.stream().noneMatch(Set.of("deposit", "loan", "customers", "revenue", "rate",
+                "corpDeposit", "retailDeposit", "corpLoan", "retailLoan", "intermediaryIncome",
+                "settlementDeposit", "retailDepositRate", "retailLoanRate", "corpDepositRate",
+                "corpLoanRate")::contains)) {
             throw invalid();
         }
         Iterator<Map.Entry<String, JsonNode>> unitEntries = units.fields();
@@ -1261,8 +1264,11 @@ public final class CodeScreenPresentationValidator {
         result.put("attention", Set.of("orgCode", "label", "count"));
         result.put("branches", Set.of("orgCode", "orgName", "cityCode", "cityName", "ownerOperatingOrgCode",
                 "parentOrgCode",
-                "lng", "lat", "coordSys", "located", "deposit", "loan", "customers", "target", "rate"));
-        result.put("citySummary", Set.of("cityCode", "orgCode", "cityName", "deposit", "loan", "customers", "revenue", "rate"));
+                "lng", "lat", "coordSys", "located", "deposit", "loan", "customers", "target", "rate",
+                "retailDepositRate", "retailLoanRate", "retailNplRate", "corpDepositRate", "corpLoanRate", "corpNplRate"));
+        result.put("citySummary", Set.of("cityCode", "orgCode", "cityName", "deposit", "loan", "customers", "revenue", "rate",
+                "corpDeposit", "retailDeposit", "corpLoan", "retailLoan", "intermediaryIncome", "settlementDeposit",
+                "retailDepositRate", "retailLoanRate", "corpDepositRate", "corpLoanRate"));
         result.put("retailAum", Set.of("value", "change", "date"));
         result.put("retailDeposit", Set.of("value", "change", "date"));
         result.put("retailDepositAverage", Set.of("value", "change", "date"));
@@ -1574,13 +1580,15 @@ public final class CodeScreenPresentationValidator {
             case "branches" -> switch (field) {
                 case "deposit", "loan", "target" -> amount;
                 case "customers" -> count;
-                case "rate" -> ratio;
+                case "rate", "retailDepositRate", "retailLoanRate", "retailNplRate",
+                        "corpDepositRate", "corpLoanRate", "corpNplRate" -> ratio;
                 default -> Set.of();
             };
             case "citySummary" -> switch (field) {
-                case "deposit", "loan", "revenue" -> amount;
+                case "deposit", "loan", "revenue", "corpDeposit", "retailDeposit", "corpLoan", "retailLoan",
+                        "intermediaryIncome", "settlementDeposit" -> amount;
                 case "customers" -> count;
-                case "rate" -> ratio;
+                case "rate", "retailDepositRate", "retailLoanRate", "corpDepositRate", "corpLoanRate" -> ratio;
                 default -> Set.of();
             };
             case "retailAum", "retailDeposit", "retailDepositAverage", "retailRevenue", "retailLoan" -> switch (field) {

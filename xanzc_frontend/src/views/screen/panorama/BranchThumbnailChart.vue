@@ -23,6 +23,11 @@ const ramp = (first, last, vertical = false) => ({ type:'linear', x:0, y:0, x2:v
 /** 静态轮廓只表达组件视觉类型，所有提示与经营数值均隐藏。 */
 function optionFor(kind) {
   const base = { animation:false, tooltip:{show:false} };
+  if (['LIST','PROGRESS'].includes(kind)) return {...base,
+    grid:{left:5,right:10,top:8,bottom:8},xAxis:{show:false,type:'value',max:100},
+    yAxis:{show:false,type:'category',inverse:true,data:['','','','']},
+    series:[{type:'bar',silent:true,barWidth:kind==='LIST'?7:10,showBackground:true,backgroundStyle:{color:'#17385e',borderRadius:3},
+      itemStyle:{borderRadius:3,color:ramp('#36e2e9','#9a7aef')},label:{show:true,position:'right',formatter:'—',color:'#8eb5d9'},data:[78,62,50,34]}]};
   if (kind === 'INSTITUTION_RANKING') return { ...base,
     grid:{left:30,right:18,top:12,bottom:9}, xAxis:{show:false,type:'value',max:100},
     yAxis:{type:'category',inverse:true,data:['1','2','3','4','5'],axisLine:{show:false},axisTick:{show:false},axisLabel:{color:'#b9d9ff',fontSize:10,margin:10,formatter:value=>`{rank|${value}}`,rich:{rank:{width:17,height:17,borderWidth:1,borderColor:'#5489bc',borderRadius:12,align:'center',color:'#a3ccfa'}}}},

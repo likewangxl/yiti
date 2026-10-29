@@ -4,7 +4,8 @@ import { buildLegacyComponentCatalog } from '../legacyComponentCatalog';
 describe('非 schema1 对公/零售 legacy 组件目录', () => {
   it('按对公页面真实组件拆分字段，不混入分行或虚构指标', () => {
     const entries = buildLegacyComponentCatalog('corporate-overview-v1');
-    expect(entries.every(item => item.kind === 'LEGACY_COMPONENT' && item.editable === true)).toBe(true);
+    expect(entries.filter(item=>item.key!=='branches').every(item => item.kind === 'LEGACY_COMPONENT' && item.editable === true)).toBe(true);
+    expect(entries.find(item=>item.key==='branches')).toMatchObject({kind:'INSTITUTION_MAP',readOnly:true,titleEditable:false});
     expect(entries.map(item => item.slot)).toEqual([
       'corpDeposit', 'corpDepositAverage', 'corpLoan', 'corpRevenue', 'corpCustomers', 'corpNplRate',
       'corpTrend', 'corpSegments', 'corpRanking', 'corpAttention', 'corpTargets', 'branches'
