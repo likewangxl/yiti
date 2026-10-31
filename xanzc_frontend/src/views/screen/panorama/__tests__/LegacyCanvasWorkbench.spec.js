@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 
-const api = vi.hoisted(() => ({ saveScreenCanvas: vi.fn(async payload => ({ canvasVersion: payload.expectedVersion + 1 })), publishScreenCanvas: vi.fn(), discardScreenCanvas: vi.fn() }));
+const api = vi.hoisted(() => ({ saveScreenCanvas: vi.fn(), getScreenCanvas: vi.fn(), publishScreenCanvas: vi.fn(), discardScreenCanvas: vi.fn() }));
 vi.mock('@/api/screen', () => api);
 import LegacyCanvasWorkbench from '../LegacyCanvasWorkbench.vue';
 
@@ -19,7 +19,65 @@ describe('LegacyCanvasWorkbench', () => {
     expect(labels.find(label=>label.text().includes('名称列')).get('input').element.disabled).toBe(true);
     expect(labels.find(label=>label.text().includes('数值列')).get('input').element.disabled).toBe(true);wrapper.unmount();
   });
-  beforeEach(() => { api.saveScreenCanvas.mockReset().mockImplementation(async payload => ({canvasVersion:payload.expectedVersion+1,canvasDraftJson:JSON.stringify({components:payload.components})})); });
+  beforeEach(() => { api.saveScreenCanvas.mockReset().mockImplementation(async payload => { api.lastPayload = payload; return {canvasVersion:payload.expectedVersion+1,canvasDraftJson:JSON.stringify({components:payload.components})}; }); api.getScreenCanvas.mockReset().mockImplementation(async () => ({ canvasVersion: api.lastPayload?.expectedVersion + 1, canvasStyleJson: JSON.stringify(api.lastPayload?.canvasStyle || {}), canvasDraftJson: JSON.stringify({ components: api.lastPayload?.components || [] }) })); });
+
+  it('保存后独立回读发现同 ID 内容变化时保留完整草稿并不触发 saved', async () => {
+    const wrapper=mount(LegacyCanvasWorkbench,{props:{screen:{id:9102},canvas}});
+    wrapper.vm.draft.components[0].styleJson='{"title":"用户标题"}';
+    api.getScreenCanvas.mockResolvedValueOnce({ canvasVersion: 5, canvasStyleJson: JSON.stringify(canvas.canvasStyle), canvasDraftJson: JSON.stringify({ components: [{ ...canvas.components[0], styleJson: '{"title":"后台旧标题"}' }, canvas.components[1]] }) });
+    expect(await wrapper.vm.save()).toBe(false);
+    expect(wrapper.vm.draft.components[0].styleJson).toContain('用户标题');
+    expect(wrapper.emitted('saved')).toBeUndefined();
+  });
+
+  it('保存后回读版本、样式和组件内容一致时接受后台归一化并清除 dirty', async () => {
+    const wrapper=mount(LegacyCanvasWorkbench,{props:{screen:{id:9102},canvas}});
+    wrapper.vm.draft.components[0].styleJson='{"title":"归一化标题"}';
+    api.getScreenCanvas.mockImplementationOnce(async () => ({ canvasVersion: 5, canvasStyleJson: JSON.stringify({ keep: { x: 1 }, background: '#03132b', designHeight: 1080, designWidth: 1920 }), canvasDraftJson: JSON.stringify({ components: [{ ...api.lastPayload.components[0], styleJson: '{"title":"归一化标题"}' }, api.lastPayload.components[1]] }) }));
+    expect(await wrapper.vm.save()).toBe(true);
+    expect(wrapper.vm.draft.components[0].styleJson).toBe('{"title":"归一化标题"}');
+    expect(wrapper.emitted('saved')).toHaveLength(1);
+    expect(wrapper.get('[data-testid="legacy-canvas-cancel"]').element.disabled).toBe(true);
+  });
+
+  it('保存回包同 ID 但内容不同则拒绝，不等待回读覆盖错误', async () => {
+    const wrapper=mount(LegacyCanvasWorkbench,{props:{screen:{id:9102},canvas}});
+    wrapper.vm.draft.components[0].styleJson='{"title":"用户标题"}';
+    api.saveScreenCanvas.mockResolvedValueOnce({ canvasVersion: 5, canvasDraftJson: JSON.stringify({ components: [{ ...canvas.components[0], styleJson: '{"title":"后台旧标题"}' }, canvas.components[1]] }) });
+    expect(await wrapper.vm.save()).toBe(false);
+    expect(api.getScreenCanvas).not.toHaveBeenCalled();
+    expect(wrapper.vm.draft.components[0].styleJson).toContain('用户标题');
+  });
+
+  it('回读失败时保留 dirty 草稿', async () => {
+    const wrapper=mount(LegacyCanvasWorkbench,{props:{screen:{id:9102},canvas}});
+    wrapper.vm.draft.components[0].styleJson='{"title":"回读失败仍保留"}';
+    api.getScreenCanvas.mockRejectedValueOnce(new Error('readback unavailable'));
+    expect(await wrapper.vm.save()).toBe(false);
+    expect(wrapper.vm.draft.components[0].styleJson).toContain('回读失败仍保留');
+    expect(wrapper.emitted('saved')).toBeUndefined();
+  });
+
+  it('提供不含 Group 的组件选择器，选择窄屏时钟会聚焦编辑区', async () => {
+    const wrapper=mount(LegacyCanvasWorkbench,{props:{screen:{id:9102},canvas}});
+    const editor = wrapper.find('.legacy-canvas-workbench__editor').element;
+    editor.scrollIntoView = vi.fn();
+    const picker = wrapper.get('[data-testid="legacy-node-picker"]');
+    expect(picker.findAll('option').map(option => option.element.value)).toEqual(['chart', 'hidden', 'clock']);
+    expect(picker.findAll('option').map(option => option.text())).not.toContain(expect.stringContaining('Group'));
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+    await picker.setValue('clock');
+    await vi.waitFor(() => expect(editor.scrollIntoView).toHaveBeenCalled());
+    expect(wrapper.vm.draft.components[1].children[0].id).toBe('clock');
+  });
+
+  it('Group 只作为选择器分组，不渲染为业务按钮；隐藏节点有明确分组', () => {
+    const grouped = { ...canvas, components: [{ id: 'group', component: 'Group', children: [{ id: 'child', component: 'ClockWidget', isShow: false }] }] };
+    const wrapper=mount(LegacyCanvasWorkbench,{props:{screen:{id:9102},canvas:grouped}});
+    expect(wrapper.find('[data-node-id="group"]').exists()).toBe(false);
+    expect(wrapper.find('[data-hidden-node-id="child"]').exists()).toBe(true);
+    expect(wrapper.get('[data-testid="legacy-node-picker"]').find('optgroup[label="隐藏组件"]').exists()).toBe(true);
+  });
   it.each([null, {}, {canvasVersion:4}, {canvasVersion:5,canvasDraftJson:'broken'}, {canvasVersion:5,canvasDraftJson:'{"components":[]}'}])('无法确认保存响应时保留全部编辑：%j', async response => {
     const wrapper=mount(LegacyCanvasWorkbench,{props:{screen:{id:9102},canvas}});
     wrapper.vm.draft.components[0].styleJson='{"title":"仍需保存"}';
@@ -35,7 +93,7 @@ describe('LegacyCanvasWorkbench', () => {
     expect(wrapper.find('[data-node-id="chart"]').text()).toContain('真实标题');
     expect(wrapper.find('[data-hidden-node-id="hidden"]').exists()).toBe(true);
     await wrapper.get('[data-node-id="chart"]').trigger('click');
-    await wrapper.get('select').setValue('8');
+    await wrapper.findAll('select')[1].setValue('8');
     expect(wrapper.emitted('dirty-change')?.at(-1)?.[0]).toBe(true);
     await wrapper.get('[data-testid="legacy-canvas-save"]').trigger('click');
     await vi.waitFor(() => expect(api.saveScreenCanvas).toHaveBeenCalled());

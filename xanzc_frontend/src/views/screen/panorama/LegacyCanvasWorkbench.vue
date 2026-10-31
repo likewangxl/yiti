@@ -9,10 +9,11 @@
     <p v-if="error" class="legacy-canvas-workbench__error" role="alert">{{ error }}</p>
     <div class="legacy-canvas-workbench__body">
       <section class="legacy-canvas-workbench__canvas-panel">
+        <label class="legacy-canvas-workbench__node-picker">选择组件<select data-testid="legacy-node-picker" :value="selectedId" :disabled="disabled || busy" @change="selectNode($event.target.value)"><optgroup label="可见组件"><option v-for="node in visibleNavigableNodes" :key="node.id" :value="node.id">{{ nodeDisplayText(node) }} · {{ node.component }}</option></optgroup><optgroup v-if="hiddenNavigableNodes.length" label="隐藏组件"><option v-for="node in hiddenNavigableNodes" :key="node.id" :value="node.id">{{ nodeDisplayText(node) }} · {{ node.component }}</option></optgroup></select></label>
         <h3>页面缩略图</h3><p>标题实时展示 · 数据仅占位</p>
         <div class="legacy-canvas-workbench__stage" :style="stageStyle" aria-label="旧坐标画布">
           <button v-for="node in visibleNodes" :key="node.id" type="button" class="legacy-canvas-workbench__node" :class="[{ 'is-active': selectedId === node.id }, `is-${String(node.component || '').toLowerCase()}`]"
-            :data-node-id="node.id" :style="nodeStyle(node)" :aria-pressed="selectedId === node.id" @click="selectedId = node.id">
+            :data-node-id="node.id" :style="nodeStyle(node)" :aria-pressed="selectedId === node.id" @click="selectNode(node.id)">
             <template v-if="node.component === 'DecorLine'"><span class="legacy-canvas-workbench__decor" :class="{vertical:node.propValue?.direction==='v'}" aria-hidden="true"></span></template>
             <template v-else-if="node.component === 'ClockWidget'"><span class="legacy-canvas-workbench__clock">— : — : —</span></template>
             <template v-else><span class="legacy-canvas-workbench__node-title">{{ nodeDisplayText(node) }}</span>
@@ -22,9 +23,9 @@
             </template>
           </button>
         </div>
-        <div v-if="hiddenNodes.length" class="legacy-canvas-workbench__hidden"><strong>隐藏组件（保留，不冒充可见）</strong><button v-for="node in hiddenNodes" :key="node.id" type="button" :data-hidden-node-id="node.id" @click="selectedId = node.id">{{ nodeTitle(node, blocks) }}</button></div>
+        <div v-if="hiddenNodes.length" class="legacy-canvas-workbench__hidden"><strong>隐藏组件（保留，不冒充可见）</strong><button v-for="node in hiddenNodes" :key="node.id" type="button" :data-hidden-node-id="node.id" @click="selectNode(node.id)">{{ nodeTitle(node, blocks) }}</button></div>
       </section>
-      <section class="legacy-canvas-workbench__editor" aria-live="polite">
+      <section ref="editorRef" class="legacy-canvas-workbench__editor" tabindex="-1" aria-live="polite">
         <template v-if="selectedNode">
           <h3>{{ nodeTitle(selectedNode, blocks) }}</h3><p class="legacy-canvas-workbench__type">{{ selectedNode.component }} · {{ selectedNode.innerType || '容器/素材' }}</p>
           <p v-if="selectedNode.component === 'ChartWidget' && !selectedBlock" class="legacy-canvas-workbench__error">缺少对应区块，已停止编辑和保存。</p>
@@ -68,20 +69,21 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import BranchThumbnailChart from './BranchThumbnailChart.vue';
-import { publishScreenCanvas, saveScreenCanvas } from '@/api/screen';
-import { buildLegacyCanvasPayload, collectLegacyNodes, nodeBinding, nodeTitle, parseLegacyJson, updateLegacyNode } from './legacyCanvasEditorModel';
+import { getScreenCanvas, publishScreenCanvas, saveScreenCanvas } from '@/api/screen';
+import { buildLegacyCanvasPayload, collectLegacyNodes, legacyCanvasSnapshotsEqual, nodeBinding, nodeTitle, normalizeLegacyCanvasSnapshot, parseLegacyJson, updateLegacyNode } from './legacyCanvasEditorModel';
 import { filterDatasourcesByMeta } from '@/views/screen/designer/widgets/chart-widget/dsFilter';
 import { getDatasourceFieldOptions } from './bindings';
 
 const props = defineProps({ screen: { type: Object, default: () => ({}) }, canvas: { type: Object, default: () => ({}) }, datasources: { type: Array, default: () => [] }, disabled: Boolean, canPublish: { type: Boolean, default: false } });
 const emit = defineEmits(['saved', 'dirty-change', 'busy-change', 'preview']);
-const baseline = ref(JSON.parse(JSON.stringify(props.canvas || {}))); const draft = ref(JSON.parse(JSON.stringify(props.canvas || {}))); const selectedId = ref(''); const saving = ref(false); const publishing = ref(false); const error = ref(''); const publishOpen = ref(false); const publishReason = ref('');
+const baseline = ref(JSON.parse(JSON.stringify(props.canvas || {}))); const draft = ref(JSON.parse(JSON.stringify(props.canvas || {}))); const selectedId = ref(''); const editorRef = ref(null); const saving = ref(false); const publishing = ref(false); const error = ref(''); const publishOpen = ref(false); const publishReason = ref('');
 const periods = ['LATEST', 'LAST_10D', 'LAST_1M', 'LAST_6M_EOM'];
 const components = computed(() => Array.isArray(draft.value.components) ? draft.value.components : []); const allNodes = computed(() => collectLegacyNodes(components.value));
 function flattenVisible(nodes, hidden = false, offsetLeft = 0, offsetTop = 0) { const out = []; for (const node of Array.isArray(nodes) ? nodes : []) { const hiddenHere = hidden || node.isShow === false; const style = node.style || {}; const copy = { ...node, style: { ...style, left: Number(style.left || 0) + offsetLeft, top: Number(style.top || 0) + offsetTop } }; if (!hiddenHere) { out.push(copy); if (node.component === 'Group') out.push(...flattenVisible(node.children, false, copy.style.left, copy.style.top)); } } return out; }
-const visibleNodes = computed(() => flattenVisible(components.value)); const hiddenNodes = computed(() => allNodes.value.filter(node => node.isShow === false)); const selectedNode = computed(() => allNodes.value.find(node => node.id === selectedId.value) || null); const blocks = computed(() => draft.value.blocks || props.canvas?.blocks || []); const selectedBlock = computed(() => blocks.value.find(block => String(block.id ?? block.blockId) === String(selectedNode.value?.blockId)) || null); const binding = computed(() => { const value = nodeBinding(selectedNode.value); return value && Object.keys(value).length ? value : parseLegacyJson(selectedBlock.value?.bindJson, {}); }); const style = computed(() => { const value = parseLegacyJson(selectedNode.value?.styleJson, null); return value && Object.keys(value).length ? value : parseLegacyJson(selectedBlock.value?.styleJson, {}); }); const propsJson = computed(() => parseLegacyJson(selectedNode.value?.propValue, {})); const missingBlock = computed(() => allNodes.value.some(node => node.component === 'ChartWidget' && !blocks.value.some(block => String(block.id ?? block.blockId) === String(node.blockId)))); const dirty = computed(() => JSON.stringify(draft.value) !== JSON.stringify(baseline.value)); const busy = computed(() => saving.value || publishing.value || publishOpen.value); const canSave = computed(() => !props.disabled && !busy.value && !missingBlock.value && dirty.value && components.value.length > 0); const canPublish = computed(() => props.canPublish && !props.disabled && !busy.value && !dirty.value && !missingBlock.value && Number.isSafeInteger(draft.value.canvasVersion)); const stageStyle = computed(() => ({ aspectRatio: `${Number(draft.value.canvasStyle?.designWidth || 1920)} / ${Number(draft.value.canvasStyle?.designHeight || 1080)}` }));
+function collectHiddenNodes(nodes, inherited = false, output = []) { for (const node of Array.isArray(nodes) ? nodes : []) { const hidden = inherited || node.isShow === false; if (hidden) output.push(node); if (Array.isArray(node.children)) collectHiddenNodes(node.children, hidden, output); } return output; }
+const visibleNodes = computed(() => flattenVisible(components.value).filter(node => node.component !== 'Group')); const hiddenNodes = computed(() => collectHiddenNodes(components.value)); const hiddenNavigableNodes = computed(() => hiddenNodes.value.filter(node => node.component !== 'Group')); const visibleNavigableNodes = computed(() => visibleNodes.value.filter(node => node.isShow !== false)); const selectedNode = computed(() => allNodes.value.find(node => node.id === selectedId.value) || null); const blocks = computed(() => draft.value.blocks || props.canvas?.blocks || []); const selectedBlock = computed(() => blocks.value.find(block => String(block.id ?? block.blockId) === String(selectedNode.value?.blockId)) || null); const binding = computed(() => { const value = nodeBinding(selectedNode.value); return value && Object.keys(value).length ? value : parseLegacyJson(selectedBlock.value?.bindJson, {}); }); const style = computed(() => { const value = parseLegacyJson(selectedNode.value?.styleJson, null); return value && Object.keys(value).length ? value : parseLegacyJson(selectedBlock.value?.styleJson, {}); }); const propsJson = computed(() => parseLegacyJson(selectedNode.value?.propValue, {})); const missingBlock = computed(() => allNodes.value.some(node => node.component === 'ChartWidget' && !blocks.value.some(block => String(block.id ?? block.blockId) === String(node.blockId)))); const dirty = computed(() => JSON.stringify(draft.value) !== JSON.stringify(baseline.value)); const busy = computed(() => saving.value || publishing.value || publishOpen.value); const canSave = computed(() => !props.disabled && !busy.value && !missingBlock.value && dirty.value && components.value.length > 0); const canPublish = computed(() => props.canPublish && !props.disabled && !busy.value && !dirty.value && !missingBlock.value && Number.isSafeInteger(draft.value.canvasVersion)); const stageStyle = computed(() => ({ aspectRatio: `${Number(draft.value.canvasStyle?.designWidth || 1920)} / ${Number(draft.value.canvasStyle?.designHeight || 1080)}` }));
 const datasourceMeta = computed(() => {
   const type = selectedNode.value?.innerType || selectedBlock.value?.componentType;
   const configured = binding.value?.dsFilter;
@@ -96,7 +98,7 @@ const chartSchema = computed(() => { const type = selectedNode.value?.innerType 
 watch(busy, value => emit('busy-change', value));
 watch(allNodes, nodes => { if (!nodes.some(node => node.id === selectedId.value)) selectedId.value = visibleNodes.value[0]?.id || nodes[0]?.id || ''; }, {immediate:true});
 watch(() => props.canvas, value => { const next = JSON.parse(JSON.stringify(value || {})); baseline.value = next; draft.value = JSON.parse(JSON.stringify(next)); selectedId.value = ''; error.value = ''; announceDirty(); }, { deep: true });
-function announceDirty() { emit('dirty-change', dirty.value); } function updateNode(id, updater) { draft.value.components = updateLegacyNode(draft.value.components, id, updater); announceDirty(); } function mutateJson(field, key, value) { if (!selectedNode.value) return; updateNode(selectedNode.value.id, node => { let json = parseLegacyJson(node[field], null); if (!json || !Object.keys(json).length) json = field === 'bindJson' ? { ...binding.value } : field === 'styleJson' ? { ...style.value } : {}; json[key] = value; return { ...node, [field]: JSON.stringify(json) }; }); }
+function announceDirty() { emit('dirty-change', dirty.value); } function selectNode(id) { selectedId.value = id; nextTick(() => { if (window.innerWidth <= 760) { editorRef.value?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }); editorRef.value?.focus?.({ preventScroll: true }); } }); } function updateNode(id, updater) { draft.value.components = updateLegacyNode(draft.value.components, id, updater); announceDirty(); } function mutateJson(field, key, value) { if (!selectedNode.value) return; updateNode(selectedNode.value.id, node => { let json = parseLegacyJson(node[field], null); if (!json || !Object.keys(json).length) json = field === 'bindJson' ? { ...binding.value } : field === 'styleJson' ? { ...style.value } : {}; json[key] = value; return { ...node, [field]: JSON.stringify(json) }; }); }
 function setBind(key, value) { mutateJson('bindJson', key, value); } function setItem(index, key, value) { const items = (binding.value.items || []).map((item, itemIndex) => itemIndex === index ? { ...item, [key]: value } : item); updateNode(selectedNode.value.id, node => ({ ...node, bindJson: JSON.stringify({ ...binding.value, items }) })); } function setStyle(key, value) { mutateJson('styleJson', key, value); } function setProp(key, value) { updateNode(selectedNode.value.id, node => ({ ...node, propValue: { ...(node.propValue || {}), [key]: value } })); } function prop(key, fallback) { return propsJson.value[key] ?? fallback; } function numberOrEmpty(value) { return value === '' ? '' : Number(value); }
 function setItems(items) { updateNode(selectedNode.value.id, node => ({ ...node, bindJson: JSON.stringify({ ...binding.value, items }) })); }
 function addItem() { setItems([...(binding.value.items || []), { col: '', label: '' }]); }
@@ -117,14 +119,22 @@ async function save() {
   try {
     const payload = savePayload();
     const response = await saveScreenCanvas(payload);
-    const savedDraft = parseLegacyJson(response?.canvasDraftJson, null);
-    const ids = collectLegacyNodes(payload.components).map(node => node.id).sort();
-    const savedIds = collectLegacyNodes(savedDraft?.components || []).map(node => node.id).sort();
-    if (!Number.isSafeInteger(response?.canvasVersion) || response.canvasVersion <= payload.expectedVersion
-        || !Array.isArray(savedDraft?.components) || JSON.stringify(ids) !== JSON.stringify(savedIds)) {
+    const responseDraft = parseLegacyJson(response?.canvasDraftJson, null);
+    if (!Number.isSafeInteger(response?.canvasVersion) || response.canvasVersion <= payload.expectedVersion || !Array.isArray(responseDraft?.components)) {
       throw new Error('服务端未确认完整保存结果，当前编辑仍保留，请重新读取核对。');
     }
-    draft.value = {...draft.value, components:savedDraft.components, canvasVersion:response.canvasVersion};
+    if (!legacyCanvasSnapshotsEqual({ canvasVersion: response.canvasVersion, components: responseDraft.components }, { canvasVersion: response.canvasVersion, components: payload.components })) {
+      throw new Error('服务端保存响应内容与本次编辑不一致，当前编辑仍保留，请重新读取核对。');
+    }
+    const confirmed = await getScreenCanvas(Number(props.screen.id));
+    const actual = normalizeLegacyCanvasSnapshot(confirmed);
+    const expected = normalizeLegacyCanvasSnapshot({ canvasVersion: response.canvasVersion, canvasStyle: payload.canvasStyle, components: payload.components });
+    if (!Array.isArray(actual.components) || actual.canvasVersion !== response.canvasVersion || !legacyCanvasSnapshotsEqual(actual, expected)) {
+      throw new Error('服务端回读结果与本次保存内容不一致，当前编辑仍保留，请重新读取核对。');
+    }
+    // 规范化只用于比较，不能把 JSON 字符串或默认值改写回用户画布。
+    draft.value = {...draft.value, components: parseLegacyJson(confirmed.canvasDraftJson, {}).components,
+      canvasStyle: parseLegacyJson(confirmed.canvasStyleJson, {}), canvasVersion:actual.canvasVersion};
     baseline.value = JSON.parse(JSON.stringify(draft.value));
     announceDirty(); emit('saved', response); return true;
   } catch (e) {
@@ -168,5 +178,7 @@ defineExpose({ save, cancel, savePayload, draft });
 .legacy-canvas-workbench__editor { overflow-wrap:anywhere; }
 .legacy-canvas-workbench__editor select { min-width:0; }
 .legacy-canvas-workbench [data-testid="legacy-canvas-save"] { color:#fff; border-color:#2d63dc; background:#2d63dc; }
+.legacy-canvas-workbench__node-picker { display:block; margin-bottom:10px; font-weight:600; font-size:12px; }
+.legacy-canvas-workbench__node-picker select { font-weight:400; }
 @media(max-width:600px) { .legacy-canvas-workbench { padding:12px; } .legacy-canvas-workbench__editor { padding:12px; } .legacy-canvas-workbench__item-row { grid-template-columns:minmax(0,1fr) minmax(0,1fr); } }
 </style>
