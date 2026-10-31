@@ -564,6 +564,7 @@ import { isConfiguredPresentation } from '../presentation/layout/presentationLay
 import { provinceGeo } from './geography.js';
 import { buildSegmentComparisons } from './retailLeadershipInsights.js';
 import { cleanOverviewLabel } from './overviewDisplayLabels.js';
+import { RETAIL_RUNTIME_KPI_ORDER } from './operatingRuntimeLayout.js';
 import {
   buildDepositComparison,
   buildInstitutionDepositView,
@@ -587,15 +588,15 @@ const configuredSeriesTables = computed(() => buildDisplaySeriesTableModel(
 const emit = defineEmits(['refresh', 'back', 'configure', 'branch-select', 'business-line-select', 'map-context']);
 const presentationLayoutEnabled = computed(() => isConfiguredPresentation(props.sourcePresentation));
 
-const KPI_DEFINITIONS = Object.freeze([
-  { key: 'retailAum', label: '零售AUM', unit: '', emptyText: '暂无数据源', emptyTitle: '当前未接入理财、基金、保险等客户金融资产来源' },
-  { key: 'retailDeposit', label: '零售一般性存款余额', unit: '亿元' },
-  { key: 'retailRevenue', label: '零售营业收入', unit: '亿元' },
-  { key: 'retailValueCustomers', label: '价值客户', unit: '', emptyText: '口径未配置', emptyTitle: '当前没有经业务确认的价值客户门槛和数据源' },
-  { key: 'retailLoan', label: '个人贷款', unit: '亿元' },
-  { key: 'retailNplRate', label: '个贷不良率', unit: '%' },
-  { key: 'retailDepositAverage', label: '零售存款月日均', unit: '亿元', emptyText: '暂无数据源', emptyTitle: '当前未接入零售存款月日均来源' }
-]);
+const KPI_DEFINITIONS = Object.freeze(RETAIL_RUNTIME_KPI_ORDER.map(key => ({ key, ...({
+  retailAum: { label: '零售AUM', unit: '', emptyText: '暂无数据源', emptyTitle: '当前未接入理财、基金、保险等客户金融资产来源' },
+  retailDeposit: { label: '零售一般性存款余额', unit: '亿元' },
+  retailRevenue: { label: '零售营业收入', unit: '亿元' },
+  retailValueCustomers: { label: '价值客户', unit: '', emptyText: '口径未配置', emptyTitle: '当前没有经业务确认的价值客户门槛和数据源' },
+  retailLoan: { label: '个人贷款', unit: '亿元' },
+  retailNplRate: { label: '个贷不良率', unit: '%' },
+  retailDepositAverage: { label: '零售存款月日均', unit: '亿元', emptyText: '暂无数据源', emptyTitle: '当前未接入零售存款月日均来源' }
+}[key] || { label: key, unit: '' }) })));
 const rankingMetricOptions = Object.freeze([
   { key: 'aum', label: 'AUM', unit: '亿元' },
   { key: 'increase', label: '较上月净增', unit: '亿元' },

@@ -1,7 +1,9 @@
+import { RETAIL_RUNTIME_KPI_ORDER } from './operatingRuntimeLayout.js';
+
 const LEGACY_LABELS = Object.freeze({
-  corpSegments: '重点客群信贷', corpAttention: '需要协调的事项', corpRanking: '对公存款排名', corpTargets: '对公经营目标',
-  retailSegments: '客户分层', retailAttention: '经营事项与数据核验', retailRanking: '机构存款对照', retailTargets: '零售经营目标',
-  corpTrend: '对公存贷款趋势', retailTrend: '储蓄余额与月日均趋势', branches: '陕西省机构分布'
+  corpSegments: '重点客群信贷', corpAttention: '需要协调的事项', corpRanking: '对公机构排名 / 数值对照', corpTargets: '对公经营目标',
+  retailSegments: '客户分层', retailAttention: '经营事项与数据核验', retailRanking: '机构存款对比', retailTargets: '零售经营目标',
+  corpTrend: '对公存贷款趋势', retailTrend: '零售存款余额与月日均趋势', branches: '陕西省机构分布'
 });
 
 const LEGACY_LAYOUTS = Object.freeze({
@@ -10,7 +12,7 @@ const LEGACY_LAYOUTS = Object.freeze({
     left: ['corpDeposit', 'corpDepositAverage', 'corpSegments', 'corpAttention'], center: ['branches', 'corpTrend'], right: ['corpRanking', 'corpTargets']
   },
   'retail-overview-v1': {
-    top: ['retailAum', 'retailDeposit', 'retailDepositAverage', 'retailRevenue', 'retailValueCustomers', 'retailLoan', 'retailNplRate'],
+    top: RETAIL_RUNTIME_KPI_ORDER,
     left: ['retailDeposit', 'retailDepositAverage', 'retailSegments', 'retailLoan','retailNplRate','retailAttention'], center: ['branches', 'retailTrend'], right: ['retailRanking', 'retailTargets']
   },
   branch: {
@@ -18,7 +20,7 @@ const LEGACY_LAYOUTS = Object.freeze({
     summary:['leadership-corporateDeposit','leadership-corporateLoan','leadership-corporateRevenue','leadership-institutionCompletion'],
     left: ['depositIncrease', 'depositAverage', 'composition', 'attention'],
     center: ['branches', 'trend', 'branchTrend'],
-    right: ['ranking', 'rate', 'loanRate'], bottom: ['citySummary']
+    right: ['rate', 'loanRate', 'ranking'], bottom: ['citySummary']
   }
 });
 

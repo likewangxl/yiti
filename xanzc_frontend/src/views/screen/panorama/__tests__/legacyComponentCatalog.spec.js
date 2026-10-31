@@ -15,8 +15,10 @@ describe('非 schema1 对公/零售 legacy 组件目录', () => {
       fieldSemantics: ['date', 'deposit', 'loan'], titleEditable: false
     });
     expect(entries.find(item => item.slot === 'corpRanking')).toMatchObject({
-      fieldSemantics: ['orgCode', 'name', 'deposit', 'increase', 'rate', 'nplRate']
+      fieldSemantics: ['orgCode', 'name', 'deposit', 'increase', 'rate', 'nplRate'],
+      label: '对公机构排名 / 数值对照'
     });
+    expect(entries.find(item => item.slot === 'corpRanking').derivedNotes).toContain('排名展示取决于机构层级与数据完整性，数据不完整时仅作数值对照');
     expect(entries.find(item => item.slot === 'corpSegments').derivedNotes).toContain('户均贷款由客群贷款与客户数派生，仅展示不可绑定');
     expect(entries.find(item => item.slot === 'corpDeposit').titleEditable).toBe(true);
   });
