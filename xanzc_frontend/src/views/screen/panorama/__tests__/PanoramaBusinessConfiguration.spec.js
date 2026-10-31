@@ -45,7 +45,10 @@ describe('业务人员配置指标', () => {
       canvasDraftJson: JSON.stringify({ components: [{ id: 'deposit', component: 'ChartWidget', blockId: 41,
         propValue: { bindingKey: 'deposit' }, bindJson: JSON.stringify(fixture.binding) }] }) });
     const wrapper = await page();
-    expect(wrapper.get('[data-testid="business-test-notice"]').text()).toContain('联调测试');
+    const notice = wrapper.get('[data-testid="business-test-notice"]').text();
+    expect(notice).toContain('测试大屏');
+    expect(notice).toContain('来源不代表正式经营数据');
+    expect(notice).not.toContain('正式经营数据已接入');
   });
 
   it('组件配置不再提供选择数值指标，数值和较上期都在指标库绑定里配置', async () => {

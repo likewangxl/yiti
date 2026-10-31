@@ -225,9 +225,10 @@
        <el-alert v-for="item in visiblePlanErrors" :key="item" class="metric-binding__status" type="error" :closable="false" show-icon :title="item" />
 
       <div class="metric-binding__actions">
+        <p v-if="workbench" class="hint">先应用指标绑定到草稿，再使用页面顶部“保存草稿”；切换前可放弃未应用编辑。</p>
         <el-button v-if="!comparisonsOnly" data-testid="metric-catalog-preview" :disabled="disabled || !plan.ok || previewing" :loading="previewing" @click="preview">预览 10 行</el-button>
         <el-button data-testid="metric-catalog-apply" type="primary" :disabled="disabled || !plan.ok" @click="$emit('apply', plan)">
-          {{ comparisonsOnly ? '保存期间比较' : (plan.existingDatasourceId ? '绑定到已有数据源' : '创建数据源并绑定') }}
+          {{ comparisonsOnly ? '应用期间比较到草稿' : (plan.existingDatasourceId ? '应用指标绑定到草稿' : '创建数据源并应用绑定') }}
         </el-button>
       </div>
       <el-alert v-if="previewError" class="metric-binding__status" type="error" :closable="false" show-icon :title="previewError" />
@@ -273,7 +274,7 @@ const props = defineProps({
   initialPeriod: { type: String, default: '' },
   initialDatasourceId: { type: [String, Number], default: '' }
 });
-defineEmits(['apply']);
+const emit = defineEmits(['apply', 'dirty-change']);
 
 const optionLimit = 200;
 const periodUnits = ['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION', 'PERCENT', 'RATIO'];
@@ -306,6 +307,14 @@ function text(value) {
 }
 const userEdited = ref(false);
 const periodEdited = ref(false);
+const dirtyReady = ref(false);
+const dirtyBaseline = ref('');
+
+function editStateKey() {
+  return JSON.stringify({ assignments: assignments.value, groupBy: groupBy.value, agg: agg.value,
+    filters: filters.value, reason: reason.value, periodModes: periodModes.value,
+    periodAssignments: periodAssignments.value });
+}
 
 const namedGroup = computed(() => String(props.screen?.orgScopeMode || '').toUpperCase() === 'NAMED_GROUP');
 const shape = computed(() => bindingShape(props.slotKey, props.compositionMode));
@@ -654,6 +663,7 @@ function restoreSourceState() {
   if (sourceNeedsCatalog()) return;
   if (initializedSourceKey.value === sourceStateKey.value) return;
   initializedSourceKey.value = sourceStateKey.value;
+  dirtyReady.value = false;
   restoredBoundKey.value = '';
   userEdited.value = false;
   periodEdited.value = false;
@@ -672,9 +682,18 @@ function restoreSourceState() {
   restoreInitialFilters();
   applyInitialAssignments();
   restoreBoundAssignments();
+  dirtyBaseline.value = editStateKey();
+  dirtyReady.value = true;
+  emit('dirty-change', false);
 }
 
 watch([sourceStateKey, catalogItems], restoreSourceState, { immediate: true, deep: true });
+
+watch([assignments, groupBy, agg, filters, reason, periodModes, periodAssignments, baseDim, category], () => {
+  if (!dirtyReady.value) return;
+  const next = editStateKey();
+  emit('dirty-change', next !== dirtyBaseline.value);
+}, { deep: true });
 
 watch(() => props.periodComparisons, value => {
   if (periodEdited.value) return;

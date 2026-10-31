@@ -7,9 +7,10 @@
         <p>{{ branchThumbnailWorkbench ? '在缩略图中选择组件，配置标题、数据来源及展示字段后保存草稿。' : '选择大屏和组件，配置标题、数据来源及展示字段后保存草稿。' }}</p>
       </div>
       <div v-if="!isCoordinateCanvas" class="panorama-bindings__actions">
-        <el-button v-if="hasLocalChanges" data-testid="binding-cancel" :disabled="writing || loading" @click="cancelLocalChanges">取消修改</el-button>
-        <el-button data-testid="binding-preview" title="请先保存草稿再预览" :disabled="!screenReady || writing || hasLocalChanges" @click="preview">预览</el-button>
-        <el-button data-testid="binding-save" type="primary" :loading="saving" :disabled="writing || !screenReady" @click="saveDraft">保存草稿</el-button>
+        <el-button v-if="pendingMetricEdits" data-testid="binding-discard-pending" :disabled="writing || loading" @click="discardPendingMetricEdits">放弃未应用编辑</el-button>
+        <el-button v-if="hasLocalChanges" data-testid="binding-cancel" :disabled="writing || loading" @click="cancelLocalChanges">取消全部修改</el-button>
+        <el-button data-testid="binding-preview" title="请先应用指标绑定到草稿，再保存草稿" :disabled="!screenReady || writing || hasLocalChanges" @click="preview">预览</el-button>
+        <el-button data-testid="binding-save" type="primary" :loading="saving" :disabled="writing || !screenReady || pendingMetricEdits" :title="pendingMetricEdits ? '请先应用指标绑定到草稿，再保存草稿' : '保存草稿'" @click="saveDraft">保存草稿</el-button>
         <el-button data-testid="binding-publish" :loading="publishing" :disabled="!canStartPublish"
                    :title="publishDisabledHint || '发布当前已保存草稿'" @click="openPublishDialog">发布</el-button>
       </div>
@@ -20,6 +21,15 @@
     </p>
     <p v-if="error" class="panorama-bindings__error" role="alert">{{ error }}</p>
     <p v-if="conflict" class="panorama-bindings__conflict" data-testid="binding-conflict" role="alert">{{ conflict }}</p>
+    <p v-if="pendingMetricEdits" class="panorama-bindings__conflict" data-testid="pending-metric-edits" role="status">指标绑定存在未应用编辑。请先应用指标绑定到草稿，再保存草稿；或点击“放弃未应用编辑”，保留其他已修改的草稿配置。</p>
+    <el-dialog v-model="datasourceChangeDialog.open" title="确认更换共用来源" width="min(580px, calc(100vw - 32px))" :close-on-click-modal="false" @closed="cancelDatasourceChange">
+    <section v-if="datasourceChangeDialog.open" data-testid="shared-source-confirm">
+      <p>当前绑定被 {{ datasourceChangeDialog.count }} 个组件共用。确认后将清理这些组件中不属于新来源的展示字段和单位，并重新预填可识别字段。</p>
+      <p v-if="datasourceChangeDialog.affectedEntries.length">受影响入口：{{ datasourceChangeDialog.affectedEntries.join('、') }}。</p>
+      <p v-if="datasourceChangeDialog.discarded.length">将丢弃：{{ datasourceChangeDialog.discarded.join('、') }}。</p>
+      <div><el-button data-testid="shared-source-cancel" @click="cancelDatasourceChange">取消</el-button><el-button data-testid="shared-source-confirm-button" type="primary" @click="confirmDatasourceChange">确认更换</el-button></div>
+    </section>
+    </el-dialog>
     <p v-if="publishError" class="panorama-bindings__error" data-testid="binding-publish-error" role="alert">{{ publishError }}</p>
     <div v-if="publishedResult" class="panorama-bindings__publish-success" data-testid="binding-published" role="status">
       <span>已发布到正式大屏“{{ publishedResult.screenName }}”，正式查看者现在读取新版本。</span>
@@ -64,7 +74,7 @@
 
     <section class="card-section panorama-bindings__screen-bar">
       <label for="panorama-screen-select">经营大屏</label>
-      <select id="panorama-screen-select" data-testid="screen-select" v-model="activeScreenId" :disabled="writing || loading" @change="changeActiveScreen">
+      <select id="panorama-screen-select" data-testid="screen-select" v-model="activeScreenId" :disabled="writing || loading || datasourceChangeDialog.open" @change="changeActiveScreen">
         <option value="">请选择已存在的大屏</option>
         <option v-for="screen in screens" :key="screen.id" :value="String(screen.id)">
           {{ screen.screenName || screen.screen_name || screen.screenCode || `屏幕 #${screen.id}` }}
@@ -99,7 +109,7 @@
       </div>
 
       <div class="panorama-bindings__body" :class="{ 'is-branch-thumbnail': branchThumbnailWorkbench }">
-        <aside v-if="branchThumbnailWorkbench" class="panorama-bindings__preview-column">
+        <aside v-if="branchThumbnailWorkbench" class="panorama-bindings__preview-column" :class="{ 'is-expanded': thumbnailExpanded }">
           <nav v-if="canInspectDrillPages" class="panorama-bindings__context-tabs" aria-label="配置页面范围">
             <button v-for="context in configurationContexts" :key="context.key" type="button" :data-testid="`config-context-${context.key}`"
               :aria-pressed="configurationContext === context.key" :disabled="writing || loading" @click="changeConfigurationContext(context.key)">{{ context.label }}</button>
@@ -153,7 +163,17 @@
           </template>
         </nav>
 
-        <main class="panorama-bindings__editor" aria-live="polite">
+      <main ref="editorPanel" class="panorama-bindings__editor" tabindex="-1" aria-live="polite">
+        <div v-if="branchThumbnailWorkbench" class="panorama-bindings__compact-selector" data-testid="compact-component-selector">
+          <nav v-if="canInspectDrillPages" class="panorama-bindings__compact-context" aria-label="配置页面范围">
+            <button v-for="context in configurationContexts" :key="context.key" type="button" :aria-pressed="configurationContext === context.key" :disabled="writing || loading" @click="changeConfigurationContext(context.key)">{{ context.label }}</button>
+          </nav>
+          <label for="compact-component-select">当前组件</label>
+          <select id="compact-component-select" :value="compactSelectedKey" :disabled="writing || loading" @change="selectCompactCatalogEntry($event)">
+            <option v-for="entry in compactCatalogEntries" :key="entry.key" :value="entry.key">{{ entry.label }}</option>
+          </select>
+          <button type="button" data-testid="toggle-thumbnail" :aria-expanded="thumbnailExpanded" @click="toggleThumbnail">{{ thumbnailExpanded ? '收起缩略图' : '查看缩略图' }}</button>
+        </div>
           <template v-if="selectedSpec">
             <h2 v-if="branchThumbnailWorkbench" class="panorama-bindings__configuration-heading" data-testid="configuration-heading">配置信息</h2>
             <header class="panorama-bindings__editor-head">
@@ -183,13 +203,13 @@
             <div :class="{ 'panorama-bindings__basic-grid': branchThumbnailWorkbench }">
             <section v-if="branchThumbnailWorkbench && !selectedCatalogReadonly" class="panorama-bindings__source-field">
               <label class="panorama-bindings__field-label" for="panorama-datasource">数据来源</label>
-              <PanoramaDatasourcePicker id="panorama-datasource" data-testid="slot-datasource"
-                fit-viewport :sources="availableDatasources" :disabled="writing || loading" v-model="selectedDatasourceId" @change="onDatasourceChange" />
+              <PanoramaDatasourcePicker :key="sourcePickerKey" id="panorama-datasource" data-testid="slot-datasource"
+                fit-viewport :sources="availableDatasources" :disabled="writing || loading || pendingMetricEdits" :model-value="selectedDatasourceId" @change="onDatasourceChange" />
               <p v-if="sharedDatasourceComponentCount > 1" class="panorama-bindings__hint">共用来源的组件会同时受影响，标题和展示字段分别保存。</p>
             </section>
             <section v-if="comparisonConfigurable" class="panorama-bindings__comparison-mode" data-testid="comparison-mode-entry">
               <label class="panorama-bindings__field-label" for="comparison-mode">比较方式</label>
-              <select id="comparison-mode" class="panorama-bindings__comparison-select" data-testid="comparison-mode" :value="comparisonMode" :disabled="writing || loading" @change="setComparisonMode($event.target.value)">
+              <select id="comparison-mode" class="panorama-bindings__comparison-select" data-testid="comparison-mode" :value="comparisonMode" :disabled="writing || loading || pendingMetricEdits" @change="setComparisonMode($event.target.value)">
                 <option value="inherit">沿用现有</option>
                 <option value="catalog">指标目录比较</option>
                 <option value="custom">历史来源比较</option>
@@ -199,7 +219,7 @@
             </section>
             <section v-else-if="branchThumbnailWorkbench && !selectedCatalogReadonly" class="panorama-bindings__period-field">
               <label class="panorama-bindings__field-label" for="panorama-period">统计周期</label>
-              <select id="panorama-period" data-testid="binding-period" :disabled="writing || loading"
+              <select id="panorama-period" data-testid="binding-period" :disabled="writing || loading || pendingMetricEdits"
                       :value="selectedBinding.period" @change="setPeriod($event.target.value)">
                 <option v-for="option in periodOptions" :key="option.value" :value="option.value" :disabled="option.disabled">{{ option.label }}</option>
               </select>
@@ -224,7 +244,7 @@
             </section>
             <MetricBindingComposer v-else-if="!selectedCatalogReadonly || periodComparisonConfigurable"
               :workbench="branchThumbnailWorkbench"
-              :key="`${activeScreenId}-${selectedCatalogEntry?.key || selectedSlot}`"
+              :key="`${activeScreenId}-${selectedCatalogEntry?.key || selectedSlot}-${metricComposerKey}`"
               :slot-key="selectedSlot"
               :slot-label="selectedSpec.label"
               :template-name="selectedTemplate"
@@ -246,14 +266,14 @@
               :initial-filters="hasNewDisplayPresentation ? selectedInitialFilters : []"
               :initial-period="selectedBinding.period"
               :initial-datasource-id="selectedBinding.dsId"
-              @apply="applyMetricBindingPlan" />
+              @apply="applyMetricBindingPlan" @dirty-change="handleMetricDirtyChange" />
             <details v-if="!selectedCatalogReadonly || comparisonConfigurable" class="panorama-bindings__advanced" data-testid="advanced-binding-fields">
               <summary>高级字段配置（技术维护）</summary>
             <template v-if="hasNewDisplayPresentation && selectedDisplayFieldMappings.length">
               <div v-for="mapping in selectedDisplayFieldMappings" :key="mapping.key" class="panorama-bindings__component-field">
                 <label class="panorama-bindings__field-label" :for="mapping.testId">{{ mapping.label }}</label>
                 <select :id="mapping.testId" :data-testid="mapping.testId"
-                        :disabled="writing || loading || !selectedDatasource"
+                        :disabled="writing || loading || pendingMetricEdits || !selectedDatasource"
                         :value="mapping.value" @change="setComponentField(mapping, $event.target.value)">
                   <option value="">跟随组件默认字段</option>
                   <option v-for="option in componentFieldOptions(mapping)" :key="option.col" :value="option.col">
@@ -262,7 +282,7 @@
                 </select>
                 <select v-if="mapping.kind === 'growthSeries'"
                         :data-testid="`component-series-unit-${mapping.seriesKey}`"
-                        :disabled="writing || loading"
+                        :disabled="writing || loading || pendingMetricEdits"
                         :value="mapping.unit || ''"
                         @change="setComponentSeriesUnit(mapping, $event.target.value)">
                   <option value="">请选择源单位</option>
@@ -319,11 +339,12 @@
 
             <label v-if="!selectedCatalogReadonly && !branchThumbnailWorkbench" class="panorama-bindings__field-label" for="panorama-datasource">数据来源</label>
             <PanoramaDatasourcePicker v-if="!selectedCatalogReadonly && !branchThumbnailWorkbench"
+              :key="sourcePickerKey"
               id="panorama-datasource"
               data-testid="slot-datasource"
               :sources="availableDatasources"
               :disabled="writing || loading"
-              v-model="selectedDatasourceId"
+              :model-value="selectedDatasourceId"
               @change="onDatasourceChange"
             />
             <p v-if="!selectedCatalogReadonly" data-testid="datasource-option-count" class="panorama-bindings__hint">当前屏可选数据源：{{ selectableDatasourceCount }} 个数据来源</p>
@@ -364,7 +385,7 @@
             <p v-if="selectedSlot === 'citySummary'" class="panorama-bindings__hint">城市汇总必须使用已按城市汇总的来源，系统不会自动累加机构指标。</p>
             </details>
             <label v-if="!selectedCatalogReadonly && (!branchThumbnailWorkbench || comparisonConfigurable)" class="panorama-bindings__field-label" for="panorama-period">统计周期</label>
-            <select v-if="!selectedCatalogReadonly && (!branchThumbnailWorkbench || comparisonConfigurable)" id="panorama-period" data-testid="binding-period" :disabled="writing || loading"
+            <select v-if="!selectedCatalogReadonly && (!branchThumbnailWorkbench || comparisonConfigurable)" id="panorama-period" data-testid="binding-period" :disabled="writing || loading || pendingMetricEdits"
                     :value="selectedBinding.period" @change="setPeriod($event.target.value)">
               <option v-for="option in periodOptions" :key="option.value" :value="option.value" :disabled="option.disabled">{{ option.label }}</option>
             </select>
@@ -389,7 +410,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { usePermissionStore } from '@/stores/permission';
 import {
@@ -500,6 +521,13 @@ const autoGaps = ref([]);
 const autoReviewSlots = reactive(new Set());
 const manualSlots = reactive(new Set());
 const localDirty = ref(false);
+const pendingMetricEdits = ref(false);
+const metricComposerKey = ref(0);
+const sourcePickerKey = ref(0);
+const applyingMetricPlan = ref(false);
+const thumbnailExpanded = ref(false);
+const editorPanel = ref(null);
+const datasourceChangeDialog = reactive({ open: false, count: 0, candidateId: '', slotKey: '', discarded: [], affectedEntries: [], generation: 0, screenId: '' });
 const legacyBusy = ref(false);
 const configurationContext = ref('screen');
 let loadGeneration = 0;
@@ -514,7 +542,7 @@ const publishPermissionGranted = computed(() => permissionStore.loaded === true
   && permissionStore.canAccess(PUBLISH_RESOURCE));
 const canvasVersionValid = computed(() => Number.isSafeInteger(canvas.value?.canvasVersion)
   && canvas.value.canvasVersion >= 0);
-const writing = computed(() => saving.value || publishing.value || publishDialogOpen.value || legacyBusy.value);
+const writing = computed(() => saving.value || publishing.value || publishDialogOpen.value || legacyBusy.value || datasourceChangeDialog.open);
 const canStartPublish = computed(() => screenReady.value && !loading.value && !saving.value && !publishing.value
   && !publishDialogOpen.value && !hasLocalChanges.value && canvasVersionValid.value && publishPermissionGranted.value);
 const canConfirmPublish = computed(() => screenReady.value && !loading.value && !saving.value && !publishing.value
@@ -547,6 +575,7 @@ const slotOrder = computed(() => {
   return hasOptionalBinding ? [...base, ...BRANCH_OPTIONAL_SLOT_ORDER] : base;
 });
 function changeActiveScreen(event) {
+  if (datasourceChangeDialog.open) return false;
   if (writing.value) {
     activeScreenId.value = loadedScreenId.value;
     if (event?.target) event.target.value = loadedScreenId.value;
@@ -561,7 +590,7 @@ function changeActiveScreen(event) {
   clearPublishState();
   return loadCanvas(activeScreenId.value);
 }
-const hasLocalChanges = computed(() => localDirty.value || Boolean(displaySession.value?.dirty));
+const hasLocalChanges = computed(() => localDirty.value || pendingMetricEdits.value || Boolean(displaySession.value?.dirty));
 const templateSpec = slot => (isCorporateTemplate.value
   ? CORPORATE_BINDING_SLOTS[slot]
   : isRetailTemplate.value ? RETAIL_BINDING_SLOTS[slot] : BINDING_SLOTS[slot]);
@@ -665,6 +694,13 @@ const drillConfiguration = computed(() => buildDrillConfigurationCatalog({catalo
 const selectedCatalogEntry = computed(() => [...catalogEntries.value, ...drillCatalogEntries.value,
   ...drillConfiguration.value.cityEntries, ...drillConfiguration.value.branchEntries].find(item => item.key === selectedCatalogKey.value)
   || catalogEntries.value[0] || null);
+const compactCatalogEntries = computed(() => configurationContext.value === 'city'
+  ? drillConfiguration.value.cityEntries
+  : configurationContext.value === 'branch' ? drillConfiguration.value.branchEntries.filter(entry => !entry.auxiliary)
+  : [...catalogEntries.value, ...drillCatalogEntries.value]);
+const compactSelectedKey = computed(() => configurationContext.value === 'branch'
+  ? drillConfiguration.value.branchEntries.find(entry => entry.parentKey === selectedCatalogKey.value)?.key || selectedCatalogKey.value
+  : selectedCatalogKey.value);
 const selectedComponentSourceMissing = computed(() => hasNewDisplayPresentation.value
   && (selectedCatalogEntry.value?.sourceMissing || (Boolean(selectedCatalogEntry.value?.sourceComponentId)
   && !displayComponents.value.some(entry => entry.component.componentId === selectedCatalogEntry.value.sourceComponentId))));
@@ -896,13 +932,14 @@ const growthSeriesMissingUnit = computed(() => {
   return series.some(item => ['retailDeposit', 'retailLoan', 'corpDeposit', 'corpLoan'].includes(item?.seriesKey)
     && !String(item?.unit || '').trim());
 });
-const sharedDatasourceComponentCount = computed(() => hasNewDisplayPresentation.value
-  ? displayComponents.value.filter(entry => entry.bindingKey === selectedSlot.value).length : 0);
+const sharedBindingEntries = computed(() => selectedSlot.value === 'citySummary' && hasNewDisplayPresentation.value
+  ? drillConfiguration.value.cityEntries.filter(entry => entry.slot === 'citySummary')
+  : catalogEntries.value.filter(entry => entry.slot === selectedSlot.value || displayComponents.value.some(
+    item => item.bindingKey === selectedSlot.value && item.component.componentId === entry.sourceComponentId)));
+const sharedDatasourceComponentCount = computed(() => sharedBindingEntries.value.length);
 const selectedDisplayUnit = computed(() => String(selectedDisplayComponent.value?.format?.displayUnit || 'AUTO'));
-const selectedDatasourceId = computed({
-  get: () => selectedBinding.value.dsId ? String(selectedBinding.value.dsId) : '',
-  set: value => { selectedBinding.value.dsId = value ? Number(value) : null; }
-});
+// 候选值由 change 处理，确认之前不写共享绑定。
+const selectedDatasourceId = computed(() => selectedBinding.value.dsId ? String(selectedBinding.value.dsId) : '');
 function sourceFieldOptions(source = {}) {
   // 只有宽表指标会透视为独立列；KPI快照中的 metrics 是筛选条件，不是输出列。
   return [...getDatasourceFieldOptions(source), ...(source?.sourceKind === 'WIDE_TABLE' ? buildDatasourceFieldOptions(source,metricCatalog.value) : [])];
@@ -981,6 +1018,7 @@ const thumbnailTitle = computed(() => configurationContext.value === 'city' ? '�
 
 function changeConfigurationContext(context) {
   if (writing.value || loading.value) return;
+  if (!blockPendingEdit('切换配置页面')) return;
   configurationContext.value = context;
   const entry=thumbnailEntries.value[0]; if(entry) selectThumbnailEntry(entry);
 }
@@ -1093,6 +1131,26 @@ function markLocalDirty() {
   localDirty.value = true;
 }
 
+function handleMetricDirtyChange(value) {
+  pendingMetricEdits.value = Boolean(value);
+  if (!value && conflict.value.startsWith('当前存在未应用指标绑定编辑')) conflict.value = '';
+}
+
+function discardPendingMetricEdits() {
+  if (!pendingMetricEdits.value || writing.value || loading.value) return false;
+  pendingMetricEdits.value = false;
+  metricComposerKey.value += 1;
+  conflict.value = '';
+  return true;
+}
+
+function blockPendingEdit(action) {
+  if (applyingMetricPlan.value) return true;
+  if (!pendingMetricEdits.value) return true;
+  conflict.value = `当前存在未应用指标绑定编辑，已阻止${action}；请先应用指标绑定到草稿，或放弃未应用编辑。`;
+  return false;
+}
+
 function updateComparisonPresentation(next) {
   if (!comparisonKey.value) return;
   const comparisons = { ...(displaySession.value.presentation.display?.comparisons || {}) };
@@ -1112,6 +1170,7 @@ function emptyPeriodComparisonConfig() {
 }
 
 function setComparisonMode(mode) {
+  if (!blockPendingEdit('修改比较方式')) return;
   if (!comparisonConfigurable.value) return;
   const key = comparisonKey.value;
   comparisonModeOverrides[key] = mode;
@@ -1161,6 +1220,7 @@ function setComparisonMode(mode) {
 }
 
 function setComparisonField(field, value) {
+  if (!blockPendingEdit('修改比较字段')) return;
   if (comparisonMode.value !== 'custom') return;
   updateComparisonPresentation({ ...(comparisonConfig.value || { enabled: true }), enabled: true, [field]: value });
 }
@@ -1217,6 +1277,7 @@ function updateComponentTitle(value) {
 }
 
 function setComponentField(mapping, value) {
+  if (!blockPendingEdit('修改展示字段')) return;
   if (!hasNewDisplayPresentation.value || !selectedDisplayComponent.value || !mapping) return;
   try {
     const nextValue = String(value || '');
@@ -1290,6 +1351,7 @@ function setComponentField(mapping, value) {
 }
 
 function setComponentSeriesUnit(mapping, value) {
+  if (!blockPendingEdit('修改展示单位')) return;
   if (mapping?.kind !== 'growthSeries' || !selectedDisplayComponent.value) return;
   const unit = ['YUAN', 'TEN_THOUSAND', 'HUNDRED_MILLION'].includes(String(value || '').toUpperCase())
     ? String(value).toUpperCase() : '';
@@ -1454,12 +1516,15 @@ function mergedDatasourceRequestForDisplay(plan, source) {
 async function applyMetricBindingPlan(plan) {
   if (!plan?.ok || writing.value || loading.value) return;
   saving.value = true;
+  applyingMetricPlan.value = true;
   error.value = '';
   try {
     if (plan.comparisonsOnly) {
       rememberPeriodComparisons(plan.periodComparisons);
       const warning = await attachPeriodMetrics(plan);
       if (warning) autoNotice.value = warning;
+      pendingMetricEdits.value = false;
+      metricComposerKey.value += 1;
       markLocalDirty();
       return;
     }
@@ -1499,11 +1564,14 @@ async function applyMetricBindingPlan(plan) {
     syncDisplayFromPlan(plan);
     rememberPeriodComparisons(plan.periodComparisons);
     conflict.value = '';
+    pendingMetricEdits.value = false;
+    metricComposerKey.value += 1;
     markLocalDirty();
   } catch (bindError) {
     error.value = bindError?.message || '指标绑定失败';
     emit('error', bindError);
   } finally {
+    applyingMetricPlan.value = false;
     saving.value = false;
   }
 }
@@ -1693,6 +1761,9 @@ function clearPublishState() {
 }
 
 function clearCanvasState() {
+  pendingMetricEdits.value = false;
+  thumbnailExpanded.value = false;
+  cancelDatasourceChange();
   configurationContext.value = 'screen';
   legacyBusy.value = false;
   canvas.value = null;
@@ -1817,6 +1888,8 @@ async function loadCanvas(requestedId = activeScreenId.value, options = {}) {
 async function cancelLocalChanges() {
   if (!hasLocalChanges.value || writing.value || loading.value) return false;
   conflict.value = '';
+  pendingMetricEdits.value = false;
+  metricComposerKey.value += 1;
   return loadCanvas(activeScreenId.value);
 }
 
@@ -1950,7 +2023,9 @@ function selectDisplayComponent(componentId) {
 }
 
 function selectCatalogEntry(entry) {
-  if (!entry) return;
+  if (!entry || writing.value || loading.value) return;
+  if (datasourceChangeDialog.open) return;
+  if (!blockPendingEdit('切换组件')) return;
   selectedCatalogKey.value = entry.key;
   selectedComponentId.value = entry.sourceComponentId || '';
   if (entry.slot) selectedSlot.value = entry.slot;
@@ -1963,9 +2038,30 @@ function selectCatalogEntry(entry) {
     compositionMode.value = getCompositionMode(bindingState[selectedSlot.value]);
   }
   conflict.value = '';
+  focusCompactEditor();
+}
+
+function selectCompactCatalogEntry(event) {
+  const key = event?.target?.value;
+  const entry = compactCatalogEntries.value.find(item => item.key === key);
+  if (!entry) return;
+  selectThumbnailEntry(entry);
+  if (event?.target) event.target.value = compactSelectedKey.value;
+}
+
+function focusCompactEditor() {
+  if (typeof window === 'undefined' || window.innerWidth >= 1100) return;
+  thumbnailExpanded.value = false;
+  nextTick(() => { editorPanel.value?.focus?.({ preventScroll: true }); editorPanel.value?.scrollIntoView?.({ block: 'start' }); });
+}
+
+function toggleThumbnail() {
+  thumbnailExpanded.value = !thumbnailExpanded.value;
+  if (thumbnailExpanded.value) nextTick(() => editorPanel.value?.parentElement?.querySelector('.panorama-bindings__preview-column')?.scrollIntoView?.({ block: 'start' }));
 }
 
 function setCompositionMode(value) {
+  if (!blockPendingEdit('修改构成模式')) return;
   if (selectedSlot.value !== 'composition') return;
   const nextMode = value === 'columns' ? 'columns' : 'rows';
   const binding = selectedBinding.value;
@@ -1982,8 +2078,56 @@ function setCompositionMode(value) {
 }
 
 function onDatasourceChange(value) {
+  sourcePickerKey.value += 1;
+  if (datasourceChangeDialog.open) return;
+  if (!blockPendingEdit('更换数据来源')) return;
   const nextId = value && typeof value === 'object' ? value.target?.value : value;
-  if (nextId !== undefined) selectedDatasourceId.value = nextId;
+  if (nextId === undefined || String(nextId) === String(selectedBinding.value.dsId || '')) return;
+  const candidate = nextId ? datasources.value.find(item => String(item.id) === String(nextId)) : null;
+  if (nextId && !candidate) return;
+  const current = selectedBinding.value;
+  const discarded = Object.keys(current.fields || {}).filter(semantic =>
+    !fieldOptionsForBinding(selectedSlot.value, semantic, nextId).some(option => option.col === current.fields[semantic]));
+  const affectedEntries = sharedBindingEntries.value.map(entry => catalogDisplayLabel(entry) || entry.label);
+  if (sharedDatasourceComponentCount.value > 1 && (current.dsId || discarded.length)) {
+    datasourceChangeDialog.open = true;
+    datasourceChangeDialog.count = sharedDatasourceComponentCount.value;
+    datasourceChangeDialog.candidateId = String(nextId);
+    datasourceChangeDialog.slotKey = selectedSlot.value;
+    datasourceChangeDialog.discarded = discarded.map(semantic => {
+      const label = templateSpec(selectedSlot.value)?.fields?.find(field => field.semantic === semantic)?.label || semantic;
+      const unit = current.units?.[semantic];
+      return `${label}：${current.fields?.[semantic]}${unit ? `（${unitLabel(unit)}）` : ''}`;
+    });
+    datasourceChangeDialog.affectedEntries = affectedEntries;
+    datasourceChangeDialog.generation = loadGeneration;
+    datasourceChangeDialog.screenId = String(activeScreenId.value);
+    return;
+  }
+  applyDatasourceChange(nextId);
+}
+
+function cancelDatasourceChange() {
+  sourcePickerKey.value += 1;
+  datasourceChangeDialog.open = false;
+  datasourceChangeDialog.candidateId = '';
+  datasourceChangeDialog.discarded = [];
+  datasourceChangeDialog.affectedEntries = [];
+}
+
+function confirmDatasourceChange() {
+  if (!datasourceChangeDialog.open) return;
+  const candidateId = datasourceChangeDialog.candidateId;
+  const slotKey = datasourceChangeDialog.slotKey;
+  cancelDatasourceChange();
+  if (slotKey !== selectedSlot.value || writing.value || loading.value
+      || datasourceChangeDialog.generation !== loadGeneration
+      || datasourceChangeDialog.screenId !== String(activeScreenId.value)) return;
+  applyDatasourceChange(candidateId);
+}
+
+function applyDatasourceChange(nextId) {
+  selectedBinding.value.dsId = nextId ? Number(nextId) : null;
   // 切换数据源后只保留新数据源仍声明的列；失效单位也必须删除，
   // 否则服务端会拒绝“单位指向未绑定字段”的 bindJson。
   const binding = selectedBinding.value;
@@ -2031,6 +2175,7 @@ function fillProvenUnits(binding) {
 }
 
 function setField(semantic, value) {
+  if (!blockPendingEdit('修改展示字段')) return;
   const binding = selectedBinding.value;
   if (value) binding.fields[semantic] = value;
   else {
@@ -2044,6 +2189,7 @@ function setField(semantic, value) {
 }
 
 function setUnit(semantic, value) {
+  if (!blockPendingEdit('修改展示单位')) return;
   if (value) selectedBinding.value.units[semantic] = value;
   else delete selectedBinding.value.units[semantic];
   manualSlots.add(selectedSlot.value);
@@ -2053,6 +2199,7 @@ function setUnit(semantic, value) {
 }
 
 function setPeriod(value) {
+  if (!blockPendingEdit('修改统计周期')) return;
   if (declaredPeriods.value.includes(value)) selectedBinding.value.period = value;
   conflict.value = '';
   markLocalDirty();
@@ -2223,6 +2370,7 @@ function writeIsCurrent(targetId, token) {
 async function saveDraft(options = {}) {
   if (isCoordinateCanvas.value) return false;
   if (writing.value) return false;
+  if (!blockPendingEdit('保存草稿')) return false;
   const targetId = screenIdValue(options.targetId ?? activeScreenId.value);
   const token = options.generation ?? loadGeneration;
   if (!targetId || !writeIsCurrent(targetId, token)) return false;
@@ -2378,6 +2526,10 @@ defineExpose({
 .panorama-bindings__slots button.is-active { color:var(--color-brand-700, #2f55ce); border-color:var(--color-brand-500, #6b83e8); background:var(--color-brand-100, #f1f4ff); }
 .panorama-bindings__slots small { color:var(--color-text-muted, #909399); white-space:nowrap; }
 .panorama-bindings__editor-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+.panorama-bindings__compact-selector { display:none; }
+.panorama-bindings__compact-context { display:flex; gap:6px; grid-column:1/-1; }
+.panorama-bindings__compact-context button { padding:7px 9px; border:1px solid #dfe7f2; border-radius:4px; background:#fff; color:#65758f; font:inherit; }
+.panorama-bindings__compact-context button[aria-pressed="true"] { border-color:#2d63dc; color:#2d63dc; background:#edf3ff; font-weight:600; }
 .panorama-bindings__editor-head h2 { margin:0 0 4px; font-size:16px; }
 .panorama-bindings__editor-head p { margin:0; color:var(--color-text-muted, #909399); font-size:12px; line-height:18px; }
 .panorama-bindings__bound { color:var(--color-success-700, #16805d); font-size:12px; }
@@ -2397,6 +2549,14 @@ defineExpose({
 .panorama-bindings__field-row em { margin-left:5px; color:var(--color-danger-700, #b42318); font-size:11px; font-style:normal; }
 .panorama-bindings__unit-hint { grid-column:2 / 4; color:var(--color-text-muted, #909399); font-size:11px; }
 .panorama-bindings__footer { display:flex; justify-content:flex-end; margin-top:14px; color:var(--color-text-muted, #909399); font-size:12px; }
+@media (max-width:1099px) {
+  .panorama-bindings__compact-selector { display:grid; grid-template-columns:auto minmax(0,1fr); gap:8px; align-items:center; margin:0 0 14px; }
+  .panorama-bindings__compact-selector label { font-size:13px; font-weight:600; white-space:nowrap; }
+  .panorama-bindings__compact-selector select { width:100%; min-height:36px; padding:0 8px; border:1px solid #c8d4e5; border-radius:4px; background:#fff; color:inherit; font:inherit; }
+  .panorama-bindings__body.is-branch-thumbnail { grid-template-columns:1fr; }
+  .panorama-bindings__body.is-branch-thumbnail > .panorama-bindings__preview-column:not(.is-expanded) { display:none; }
+  .panorama-bindings__compact-selector > button { grid-column:1/-1; justify-self:start; padding:6px 10px; border:1px solid #dfe7f2; border-radius:4px; background:white; color:#2d63dc; font:inherit; }
+}
 .panorama-bindings--visual { gap:12px; padding-top:12px; color:#27344b; font-size:14px; --el-color-primary:#2d63dc; --el-color-primary-light-3:#7097e9; --el-color-primary-light-9:#edf3ff; }
 .panorama-bindings--visual .panorama-bindings__header { margin:0; align-items:center; min-height:58px; }
 .panorama-bindings--visual .panorama-bindings__header h1 { font-size:28px; line-height:1.4; font-weight:700; color:#172339; }

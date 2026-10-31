@@ -35,6 +35,15 @@ function mountComposer(props = {}) {
 }
 
 describe('MetricBindingComposer', () => {
+  it('用户修改指标绑定时报告未应用草稿，初始回显不报告脏状态', async () => {
+    const wrapper = mountComposer({ initialFields: { value: '已有字段' }, initialUnits: { value: 'YUAN' } });
+    await wrapper.vm.$nextTick();
+    expect(wrapper.emitted('dirty-change').every(([dirty]) => dirty === false)).toBe(true);
+    wrapper.get('[data-testid="metric-catalog-suggest"]').trigger('click');
+    await wrapper.vm.$nextTick();
+    expect(wrapper.emitted('dirty-change')?.at(-1)).toEqual([true]);
+    wrapper.unmount();
+  });
   it('宽配置工作台按字段表格编辑并沿用原绑定提交逻辑', async () => {
     const wrapper = mountComposer({ workbench: true });
     expect(wrapper.get('[data-testid="metric-workbench-table"]').text()).toContain('绑定指标');
