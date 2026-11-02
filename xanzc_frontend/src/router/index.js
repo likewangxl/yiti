@@ -6,6 +6,7 @@ import { usePermissionStore } from '@/stores/permission';
 import http from '@/api/http';
 import { ElMessage } from 'element-plus';
 import { createRouteProgress } from './routeProgress';
+import { shouldShowRestoredLoginScreen } from '@/utils/loginScreen';
 import { hasRouteAccessRequirements, resolveRouteAccess } from './access';
 import {
   normalizeRoleCodes,
@@ -19,6 +20,12 @@ const routes = [
     name: 'Login',
     component: () => import('@/views/login/Index.vue'),
     meta: { title: '登录', public: true }
+  },
+  {
+    path: '/login-landing',
+    name: 'LoginLanding',
+    component: () => import('@/views/login/LoginLanding.vue'),
+    meta: { title: '登录首屏', hideInMenu: true }
   },
   // 个人经营驾驶舱：独立全屏容器，沿用工作台菜单门禁和平台登录态。
   {
@@ -484,6 +491,11 @@ router.beforeEach(async (to) => {
     const user = await http.get('/api/auth/current-user');
     if (user && user.empId) {
       store.setUser(user);
+      if (shouldShowRestoredLoginScreen(user, to.path)) {
+        const menus = useMenuStore();
+        await menus.load();
+        if (menus.hasUrl('/workspace')) return { path: '/login-landing', replace: true };
+      }
       return checkDeclaredRouteAccess(to);
     }
   } catch (_) {

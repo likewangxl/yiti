@@ -19,6 +19,11 @@ vi.mock('@/api/system', () => ({
   getRoleMenuIds: vi.fn(),
   replaceRoleMenus: vi.fn()
 }));
+const loginScreenApi = vi.hoisted(() => ({ getRoleLoginScreen: vi.fn(), saveRoleLoginScreen: vi.fn() }));
+vi.mock('@/api/loginScreen', () => loginScreenApi);
+const permissionApi = vi.hoisted(() => ({ usePermissionStore: vi.fn(() => ({ loaded: true, load: vi.fn().mockResolvedValue({}), canAccess: () => true })) }));
+vi.mock('@/stores/permission', () => permissionApi);
+vi.mock('@/stores/user', () => ({ useUserStore: () => ({ user: { empId: 'TEST' } }) }));
 
 import {
   createRole,
@@ -30,6 +35,7 @@ import {
   replaceRoleMenus,
   updateRole
 } from '@/api/system';
+import { getRoleLoginScreen, saveRoleLoginScreen } from '@/api/loginScreen';
 import Roles from '../Roles.vue';
 
 const passthrough = (name) => ({
@@ -70,6 +76,7 @@ const stubs = {
     template: '<select v-bind="$attrs"><slot /></select>'
   },
   'el-option': { name: 'ElOption', props: ['label', 'value'], template: '<option :value="value">{{ label }}</option>' },
+  'el-input-number': { name: 'ElInputNumber', props: ['modelValue', 'disabled'], emits: ['update:modelValue'], template: '<input type="number" :disabled="disabled" :value="modelValue" @input="$emit(\'update:modelValue\', Number($event.target.value))" />' },
   'el-table': {
     name: 'ElTable',
     inheritAttrs: false,
@@ -129,6 +136,8 @@ beforeEach(() => {
   getMenuTree.mockResolvedValue([]);
   getRoleMenuIds.mockResolvedValue([]);
   replaceRoleMenus.mockResolvedValue({ ok: true });
+  getRoleLoginScreen.mockResolvedValue({ roleId: 1, target: 'WORKSPACE', priority: 100, version: 'v1', editable: true });
+  saveRoleLoginScreen.mockResolvedValue({ roleId: 1, target: 'PERSONAL', priority: 2, version: 'v2' });
 });
 
 afterEach(() => wrapper?.unmount());
@@ -194,5 +203,52 @@ describe('Roles.vue 角色管理工作区', () => {
       keyword: undefined,
       recordStatus: undefined
     });
+  });
+
+  it('读取首屏配置成功后才允许保存，并保存后回读校验', async () => {
+    wrapper = mountPage();
+    await settle();
+    getRoleLoginScreen.mockReset()
+      .mockResolvedValueOnce({ roleId: 1, target: 'WORKSPACE', priority: 100, version: 'v1', editable: true })
+      .mockResolvedValueOnce({ roleId: 1, target: 'PERSONAL', priority: 2, version: 'v2', editable: true });
+    await wrapper.vm.openLoginScreenDlg({ roleId: 1, roleChName: '测试角色' });
+    expect(getRoleLoginScreen).toHaveBeenCalledWith(1);
+    expect(wrapper.vm.loginScreenDlg.loaded).toBe(true);
+    wrapper.vm.loginScreenDlg.form.target = 'PERSONAL';
+    wrapper.vm.loginScreenDlg.form.priority = 2;
+    wrapper.vm.loginScreenDlg.form.reason = '首屏调整';
+    await wrapper.vm.saveLoginScreenDlg();
+    expect(saveRoleLoginScreen).toHaveBeenCalledWith(1, expect.objectContaining({ expectedVersion: 'v1', reason: '首屏调整' }));
+    expect(getRoleLoginScreen).toHaveBeenCalledTimes(2);
+    expect(wrapper.vm.loginScreenDlg.show).toBe(false);
+  });
+
+  it('读取失败时保持未加载状态并禁止保存，切换角色后迟到响应不污染新角色', async () => {
+    const first = deferred();
+    getRoleLoginScreen.mockReset().mockReturnValueOnce(first.promise).mockResolvedValueOnce({ roleId: 2, target: 'RETAIL', priority: 3, version: 'v2', editable: true });
+    wrapper = mountPage();
+    await settle();
+    const firstOpen = wrapper.vm.openLoginScreenDlg({ roleId: 1, roleChName: '一号' });
+    await wrapper.vm.openLoginScreenDlg({ roleId: 2, roleChName: '二号' });
+    first.resolve({ roleId: 1, target: 'PERSONAL', priority: 1, version: 'v1' });
+    await Promise.all([firstOpen, settle()]);
+    expect(wrapper.vm.loginScreenDlg.role.roleId).toBe(2);
+    expect(wrapper.vm.loginScreenDlg.form.target).toBe('RETAIL');
+    expect(wrapper.vm.loginScreenDlg.loaded).toBe(true);
+  });
+
+  it('GET 缺字段或不可编辑时 fail-close，GOV-40910 保留输入并提示重读', async () => {
+    getRoleLoginScreen.mockReset().mockResolvedValueOnce({ roleId: 1, target: 'PERSONAL', priority: 2 });
+    wrapper = mountPage();
+    await settle();
+    await wrapper.vm.openLoginScreenDlg({ roleId: 1, roleChName: '测试角色' });
+    expect(wrapper.vm.loginScreenDlg.loaded).toBe(false);
+    getRoleLoginScreen.mockResolvedValueOnce({ roleId: 1, target: 'WORKSPACE', priority: 100, version: 'v1', editable: true });
+    await wrapper.vm.openLoginScreenDlg({ roleId: 1, roleChName: '测试角色' });
+    wrapper.vm.loginScreenDlg.form.reason = '冲突测试';
+    saveRoleLoginScreen.mockRejectedValueOnce({ code: 'GOV-40910' });
+    await wrapper.vm.saveLoginScreenDlg();
+    expect(wrapper.vm.loginScreenDlg.show).toBe(true);
+    expect(wrapper.vm.loginScreenDlg.conflict).toBe(true);
   });
 });

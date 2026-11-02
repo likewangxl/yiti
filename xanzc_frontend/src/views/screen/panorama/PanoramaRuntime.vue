@@ -56,6 +56,7 @@ const props = defineProps({
   view: { type: Object, default: () => ({}) },
   context: { type: Object, default: () => ({}) },
   backPath: { type: String, default: '' },
+  backReplace: { type: Boolean, default: false },
   batchRequired: { type: Boolean, default: false }
 });
 const emit = defineEmits(['back', 'configure', 'refresh', 'branch-select', 'business-line-select']);
@@ -457,7 +458,8 @@ function onRefresh() {
 function onBack() {
   emit('back');
   if (props.backPath) {
-    if (router?.push) router.push(props.backPath);
+    if (props.backReplace && router?.replace) router.replace(props.backPath);
+    else if (router?.push) router.push(props.backPath);
     return;
   }
   if (router?.back && window.history.length > 1) router.back();

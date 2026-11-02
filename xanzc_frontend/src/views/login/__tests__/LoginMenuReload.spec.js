@@ -61,6 +61,12 @@ async function settle() {
 }
 
 describe('登录成功后菜单强制重拉（换用户菜单残留回归）', () => {
+  it('登录后的菜单请求401时保持登录页，不以no-access覆盖会话失效', async () => {
+    getMyMenus.mockRejectedValue({ response: { status: 401 } });
+    wrapper = mount(Login, { global: { plugins: [pinia], stubs } });
+    await wrapper.vm.onSubmit(); await settle();
+    expect(routerReplace).not.toHaveBeenCalled();
+  });
   it('上一用户菜单已缓存(loaded=true)时，新用户登录成功即重拉出新菜单', async () => {
     const menuStore = useMenuStore();
     // 模拟上一个用户 A 的会话残留：菜单已加载
@@ -81,7 +87,7 @@ describe('登录成功后菜单强制重拉（换用户菜单残留回归）', (
 
     // 修复前：load() 无 force 被 loaded=true 拦下，tree 仍是 A 的菜单
     expect(menuStore.tree[0].menuName, '登录成功后应强制重拉当前用户菜单').toBe('工作台');
-    expect(routerReplace).toHaveBeenCalledWith('/workspace');
+    expect(routerReplace).toHaveBeenCalledWith('/login-landing');
   });
 
   it('仅有红色引擎菜单时直接进入红色引擎，而非无权限的工作台', async () => {

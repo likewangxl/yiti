@@ -164,6 +164,9 @@ public class ConfigService {
      */
     @Transactional
     public void updateConfig(String key, String value, String reason) {
+        if (key != null && key.toLowerCase(java.util.Locale.ROOT).startsWith("ui.login-screen.role.")) {
+            throw new BizException("GOV-40310", "请通过角色管理的登录首屏配置修改，保留独立权限与版本校验");
+        }
         log.info("[ConfigService.updateConfig] configKey={}, reason={}", key, reason);
         SysConfigKv existing = configMapper.selectByConfigKey(key);
         if (existing == null) {

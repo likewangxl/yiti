@@ -3,7 +3,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 
 const api = vi.hoisted(() => ({ listAvailableScreens: vi.fn(), getScreenView: vi.fn() }));
-const router = vi.hoisted(() => ({ push: vi.fn(), back: vi.fn() }));
+const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }));
 vi.mock('@/api/screen', () => api);
 vi.mock('vue-router', () => ({ useRouter: () => router }));
 vi.mock('../PanoramaDashboard.vue', () => ({
@@ -37,6 +37,12 @@ beforeEach(() => {
 });
 
 describe('PanoramaRuntime S13 navigation', () => {
+  it('登录首屏关闭用replace，普通大屏返回仍保持push', async () => {
+    const wrapper = mount(PanoramaRuntime, { props: { view, backPath: '/workspace', backReplace: true } });
+    wrapper.vm.onBack();
+    expect(router.replace).toHaveBeenCalledWith('/workspace');
+    expect(router.push).not.toHaveBeenCalled(); wrapper.unmount();
+  });
   it('机构事件进入固定受保护支行路由并携带当前上下文', async () => {
     const wrapper = mount(PanoramaRuntime, { props: { view, context: { screenCode: 'SCR_PROVINCE', businessLine: 'COMMON', period: 'LATEST', metricKey: 'deposit', cityCode: '610100' } } });
     await wrapper.get('[data-action="select-branch"]').trigger('click');

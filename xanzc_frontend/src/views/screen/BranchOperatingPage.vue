@@ -23,12 +23,12 @@
     <section v-if="navigationBlocked" class="branch-operating-navigation-blocked" data-testid="branch-operating-navigation-blocked" role="alert">
       <h2>机构范围待确认</h2>
       <p>{{ pageError || '当前旧链接缺少已确认的机构上下文，未进入机构主路径。' }}</p>
-      <button type="button" data-action="back-to-screen-center" @click="router.push('/screens')">返回大屏中心</button>
+      <button type="button" data-action="back-to-screen-center" @click="router.replace(route.query?.from === 'login' ? '/workspace' : '/screens')">{{ route.query?.from === 'login' ? '进入工作台' : '返回大屏中心' }}</button>
     </section>
     <BranchOperatingOverview v-else :model="dashboard" :source-presentation="branchDisplayPresentation"
       :performance-enabled="true"
       :loading="loading || (!isTestSource && financialLoading)" :error="visibleError"
-      @refresh="initialize" @back="router.push('/screens')" @branch-select="selectBranch" />
+      @refresh="initialize" @back="router.replace(route.query?.from === 'login' ? '/workspace' : '/screens')" @branch-select="selectBranch" />
   </section>
 </template>
 

@@ -81,6 +81,12 @@ async function mountPage() {
 }
 
 describe('CodeScreenPage', () => {
+  it('登录首屏的关闭文案和运行时返回指向工作台', async () => {
+    routeState.query = { from: 'login' };
+    const page = await mountPage();
+    expect(page.get('[data-action="back-to-screen-center"]').text()).toBe('进入工作台');
+    expect(page.findComponent(runtimeStub).props('backPath')).toBe('/workspace');
+  });
   it('拒绝目录中的 DEMO 模式并保持无运行时内容', async () => {
     routeState.params.template = 'corporate-overview-v1';
     listAvailableScreens.mockResolvedValue([{ ...corporate, dataMode: 'DEMO' }]);

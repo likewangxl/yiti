@@ -26,6 +26,15 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class ConfigServiceTest {
 
+    @Test
+    void loginScreenPreferencesCannotBypassDedicatedPermissionAndVersionChecks() {
+        assertThatThrownBy(() -> configService.updateConfig(
+                "ui.login-screen.role.233", "{\"target\":\"PERSONAL\",\"priority\":100}", "绕过专用接口"))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("角色管理");
+        verifyNoInteractions(configMapper, memoryCacheService);
+    }
+
     @Mock
     MemoryCacheService memoryCacheService;
     @Mock

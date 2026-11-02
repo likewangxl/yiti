@@ -150,6 +150,10 @@ async function changeRange(next) {
   await load();
 }
 function goBack() {
+  if (route.query?.from === 'login' && preview.value !== 'draft') {
+    router.replace('/workspace');
+    return;
+  }
   router.push(
     preview.value === "draft"
       ? "/screen-admin/designer?tab=personal"

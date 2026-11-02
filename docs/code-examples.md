@@ -6,6 +6,8 @@
 
 ## 后端
 
+- 角色登录首屏偏好与并发保护：`system-governance-center/.../service/LoginScreenRuleService.java`；独立读写资源、已有角色校验、原值CAS、统一审计、通用配置入口防绕过。前端按主角色排序及授权机构解析：`xanzc_frontend/src/utils/loginScreen.js`，生命周期隔离：`views/login/LoginLanding.vue`。
+
 - 支行 KPI 只读范围交集：`performance-engine-center/src/main/java/com/bank/branch/platform/performance/service/KpiScoreCalcService.java` 的机构查询重载；新路径校验方案、日期和授权上下文，再把指定机构与用户可见范围求交，下推 Mapper，并通过 `scopeOrgCode` 明确响应身份。
 - 支行指标完成及完整排名：`xanzc_frontend/src/views/screen/panorama/branchAchievementModel.js`、`branchPerformanceModel.js`；全量分页与旧后端范围确认守护：`branchPerformanceLoader.js`；页面实现：`BranchCoreMetrics.vue`、`BranchAchievementPanel.vue`、`BranchPerformancePanel.vue`。
 

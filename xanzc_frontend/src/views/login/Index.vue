@@ -90,7 +90,7 @@
           <div v-if="showUias" class="uias-login">
             <div class="uias-intro" role="note">
               <span class="uias-icon" aria-hidden="true"></span>
-              <p>使用统一身份认证安全访问平台，登录后将返回工作台。</p>
+              <p>使用统一身份认证安全访问平台，登录后展示已授权的默认大屏或工作台。</p>
             </div>
             <!-- 统一认证登录入口：直接 302 到后端 /api/auth/uniauth/redirect → UIAS 单点登录页 -->
             <el-button class="btn-uniauth" native-type="button" @click="onUniAuthClick">
@@ -112,6 +112,7 @@ import { ElMessage } from 'element-plus';
 import { login } from '@/api/auth';
 import { useUserStore } from '@/stores/user';
 import { useMenuStore } from '@/stores/menu';
+import { resetLoginScreenShown } from '@/utils/loginScreen';
 
 const router = useRouter();
 const route  = useRoute();
@@ -151,16 +152,29 @@ async function onSubmit() {
   try {
     const user = await login(form.username, form.password);
     store.setUser(user);
+    resetLoginScreenShown();
+    const loginIdentity = store.user;
     // 强制重拉当前用户菜单：session 过期被守卫踢回 /login 等未整页刷新的路径下，
     // menu store 仍缓存着上一个用户的菜单（loaded=true 时 load() 默认跳过）
     const menuStore = useMenuStore();
     let landingPath = '/no-access';
     try {
       await menuStore.load(true);
-      landingPath = menuStore.resolveLandingPath(route.query.redirect && String(route.query.redirect));
-    } catch (_) {
+      const redirect = route.query.redirect && String(route.query.redirect);
+      // 登录首屏只接管默认入口；明确业务深链接仍回到原目标。
+      if (redirect && !['/', '/workspace', '/login-landing'].includes(redirect.split(/[?#]/)[0]) && menuStore.isAuthorizedRedirect(redirect)) {
+        landingPath = menuStore.resolveLandingPath(redirect);
+      } else if (menuStore.hasUrl('/workspace')) {
+        // 生产菜单已确认工作台权限后，再进入首屏选择页。
+        landingPath = '/login-landing';
+      } else {
+        landingPath = menuStore.resolveLandingPath();
+      }
+    } catch (error) {
       // 登录已成功，但授权菜单不可用时 fail-close 到说明页，不能沿用上一用户菜单。
+      if (Number(error?.response?.status || error?.status) === 401) { store.clear(); return; }
     }
+    if (!store.user || store.user !== loginIdentity) return;
     ElMessage.success(`欢迎，${user.displayName || user.username}`);
     router.replace(landingPath);
   } catch (e) {
@@ -179,6 +193,8 @@ async function onSubmit() {
 
 // === 统一认证登录：直接 302 跳后端 → UIAS 单点登录页 ===
 function onUniAuthClick() {
+  store.clear();
+  resetLoginScreenShown();
   // 后端 /api/auth/uniauth/redirect 会拼出 UIAS URL 并 302 跳走
   window.location.href = '/api/auth/uniauth/redirect';
 }

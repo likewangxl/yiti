@@ -179,6 +179,15 @@ describe('Workspace Index', () => {
     expect(routerPush).toHaveBeenLastCalledWith('/personal-dashboard');
   });
 
+  it('工作台提供可重复进入的默认大屏入口', async () => {
+    wrapper = mountPage();
+    await settle();
+    const entry = wrapper.find('button[aria-label="打开我的默认大屏"]');
+    expect(entry.exists()).toBe(true);
+    await entry.trigger('click');
+    expect(routerPush).toHaveBeenLastCalledWith({ path: '/login-landing', query: { from: 'workspace' } });
+  });
+
   it('加载期间与空态互斥，待办和已办分别显示准确的空文案', async () => {
     const announcementRequest = deferred();
     const notificationRequest = deferred();

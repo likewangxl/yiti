@@ -2,6 +2,8 @@
 
 本文件对应 `system-governance-center/src/main/java/com/bank/branch/platform/governance/api` 的公开 Bean 接口。调用方只能依赖这些接口和 `api.dto` 中的 DTO，不得引用治理实体、Mapper 或内部 Service。方法均为同 JVM 同步调用，异常按统一业务异常向调用方传播。
 
+登录首屏配置由治理中心持有，REST契约见03文档，不新增供业务模块写配置的公开Java API。`LoginScreenRuleDTO`携带roleId、固定target、priority、原值版本version及管理写能力editable；`LoginScreenRuleSaveReqDTO`携带target、priority、expectedVersion、reason；`LoginScreenRulesRespDTO.rules`只描述当前角色偏好。首屏服务仅通过auth的`CurrentUserApi/RoleApi/ResourceApi`取当前身份、有效角色和资源授权，通过治理`AuditApi`记录变更；不读取auth私有表，不依赖report，前端导航继续调用report原有授权接口。配置偏好不得被任何调用方当作访问凭证。
+
 ## 1. 字典 `DictApi`
 
 ```java

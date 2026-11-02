@@ -7,7 +7,7 @@
         <span v-if="activeDataMode === 'LIVE'">统计口径与环境见来源说明</span>
         <span data-testid="runtime-updated-at">本次查询/刷新时间 {{ lastUpdated }}</span>
         <button type="button" data-action="refresh-runtime" @click="refreshScreen">刷新</button>
-        <button type="button" data-action="back-to-screen-center" @click="backToCenter">返回大屏中心</button>
+        <button type="button" data-action="back-to-screen-center" @click="backToCenter">{{ route.query?.from === 'login' ? '进入工作台' : '返回大屏中心' }}</button>
       </div>
     </header>
 
@@ -18,19 +18,19 @@
     <section v-else-if="state === 'forbidden'" class="code-screen-page__state code-screen-page__state--error" data-testid="code-screen-forbidden" role="alert">
       <h2>当前账号无权访问此大屏</h2>
       <p>目录授权已变化，请返回大屏中心重新选择。</p>
-      <button type="button" data-action="back-to-screen-center" @click="backToCenter">返回大屏中心</button>
+      <button type="button" data-action="back-to-screen-center" @click="backToCenter">{{ route.query?.from === 'login' ? '进入工作台' : '返回大屏中心' }}</button>
     </section>
 
     <section v-else-if="state === 'unsupported'" class="code-screen-page__state code-screen-page__state--error" data-testid="code-screen-unsupported" role="alert">
       <h2>大屏模板不可用</h2>
       <p>目录或发布包未返回受支持的模板或数据模式。</p>
-      <button type="button" data-action="back-to-screen-center" @click="backToCenter">返回大屏中心</button>
+      <button type="button" data-action="back-to-screen-center" @click="backToCenter">{{ route.query?.from === 'login' ? '进入工作台' : '返回大屏中心' }}</button>
     </section>
 
     <section v-else-if="state === 'error'" class="code-screen-page__state code-screen-page__state--error" data-testid="code-screen-error" role="alert">
       <h2>大屏目录确认失败</h2>
       <p>{{ errorMessage }}</p>
-      <button type="button" data-action="back-to-screen-center" @click="backToCenter">返回大屏中心</button>
+      <button type="button" data-action="back-to-screen-center" @click="backToCenter">{{ route.query?.from === 'login' ? '进入工作台' : '返回大屏中心' }}</button>
     </section>
 
     <section v-else class="code-screen-page__content">
@@ -40,7 +40,8 @@
         :view="runtimeView"
         :context="runtimeContext"
         :batch-required="activeTemplate === 'branch-overview-v1'"
-        back-path="/screens"
+        :back-path="route.query?.from === 'login' ? '/workspace' : '/screens'"
+        :back-replace="route.query?.from === 'login'"
         @refresh="onRuntimeRefresh"
       />
     </section>
@@ -227,7 +228,8 @@ function onRuntimeRefresh() {
 }
 
 function backToCenter() {
-  router.push('/screens');
+  if (route.query?.from === 'login') router.replace('/workspace');
+  else router.push('/screens');
 }
 
 watch(() => [route.params.template, route.query, userStore.user], loadCatalog, { deep: true });

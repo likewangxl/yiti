@@ -14,6 +14,16 @@
         >
           我的经营驾驶舱
         </el-button>
+        <el-button
+          type="primary"
+          plain
+          size="small"
+          class="workspace-default-screen-entry"
+          aria-label="打开我的默认大屏"
+          @click="router.push({ path: '/login-landing', query: { from: 'workspace' } })"
+        >
+          我的默认大屏
+        </el-button>
       </div>
       <dl class="workspace-summary" aria-label="工作台事项摘要">
         <div class="summary-item">

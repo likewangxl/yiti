@@ -59,8 +59,8 @@
           <template #default="{row}">
             <BpAdaptiveRowActions>
               <template #primary><el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button></template>
-              <template #expanded><el-button link type="primary" size="small" @click="openMenuDlg(row)">分配菜单</el-button><el-button link type="primary" size="small" @click="openUsers(row)">已绑用户</el-button><el-button link type="danger" size="small" @click="confirmDelete(row)">删除</el-button></template>
-              <template #compact><el-dropdown trigger="click" popper-class="bp-crud-menu"><el-button link size="small" aria-label="更多角色操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item @click="openMenuDlg(row)">分配菜单</el-dropdown-item><el-dropdown-item @click="openUsers(row)">已绑用户</el-dropdown-item><el-dropdown-item divided class="danger-item" @click="confirmDelete(row)">删除</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template>
+              <template #expanded><el-button link type="primary" size="small" @click="openMenuDlg(row)">分配菜单</el-button><el-button v-if="loginScreenReadable" link type="primary" size="small" @click="openLoginScreenDlg(row)">登录首屏</el-button><el-button link type="primary" size="small" @click="openUsers(row)">已绑用户</el-button><el-button link type="danger" size="small" @click="confirmDelete(row)">删除</el-button></template>
+              <template #compact><el-dropdown trigger="click" popper-class="bp-crud-menu"><el-button link size="small" aria-label="更多角色操作">更多</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item @click="openMenuDlg(row)">分配菜单</el-dropdown-item><el-dropdown-item v-if="loginScreenReadable" @click="openLoginScreenDlg(row)">登录首屏</el-dropdown-item><el-dropdown-item @click="openUsers(row)">已绑用户</el-dropdown-item><el-dropdown-item divided class="danger-item" @click="confirmDelete(row)">删除</el-dropdown-item></el-dropdown-menu></template></el-dropdown></template>
             </BpAdaptiveRowActions>
           </template>
         </el-table-column>
@@ -104,6 +104,17 @@
         <el-button @click="dlg.show = false">取消</el-button>
         <el-button type="primary" :loading="dlg.saving" @click="saveDlg">保存</el-button>
       </template>
+    </el-dialog>
+
+    <el-dialog v-model="loginScreenDlg.show" class="bp-crud-dialog" :title="`登录首屏 · ${loginScreenDlg.role?.roleChName || ''}`" width="min(520px, calc(100vw - 32px))" :close-on-click-modal="false">
+      <el-form v-if="loginScreenDlg.role" label-width="110px" :disabled="loginScreenDlg.saving || !loginScreenDlg.editable">
+        <p v-if="loginScreenDlg.error" class="hint" role="alert">{{ loginScreenDlg.error }}</p>
+        <el-form-item label="默认大屏"><el-select v-model="loginScreenDlg.form.target" :disabled="!loginScreenDlg.loaded || loginScreenDlg.loading" style="width:100%"><el-option v-for="item in LOGIN_SCREEN_TARGETS" :key="item.value" :value="item.value" :label="item.label" /></el-select></el-form-item>
+        <el-form-item label="备用优先级"><el-input-number v-model="loginScreenDlg.form.priority" :disabled="!loginScreenDlg.loaded || loginScreenDlg.loading" :min="0" :max="10000" /></el-form-item>
+        <p class="hint">仅决定登录后的默认展示，不授予大屏访问权限。</p>
+        <el-form-item label="变更原因"><el-input v-model="loginScreenDlg.form.reason" :disabled="!loginScreenDlg.loaded || loginScreenDlg.loading" type="textarea" :rows="2" maxlength="200" /></el-form-item>
+      </el-form>
+      <template #footer><el-button @click="loginScreenDlg.show = false">取消</el-button><el-button v-if="loginScreenDlg.conflict" @click="openLoginScreenDlg(loginScreenDlg.role)">重新读取</el-button><el-button type="primary" :disabled="!loginScreenDlg.loaded || !loginScreenDlg.editable" :loading="loginScreenDlg.saving" @click="saveLoginScreenDlg">保存</el-button></template>
     </el-dialog>
 
     <!-- 分配菜单弹窗（参考 xanpd role.vue：左侧角色名 + 右侧菜单树勾选） -->
@@ -190,9 +201,12 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { getRoleLoginScreen, saveRoleLoginScreen } from '@/api/loginScreen';
+import { usePermissionStore } from '@/stores/permission';
+import { useUserStore } from '@/stores/user';
 import BpAdaptiveRowActions from '@/components/BpAdaptiveRowActions.vue';
 import {
   listRoles, createRole, updateRole, deleteRole, listRoleUsers,
@@ -200,6 +214,12 @@ import {
 } from '@/api/system';
 
 const router = useRouter();
+let permissionStore = null;
+const userStore = useUserStore();
+permissionStore = usePermissionStore();
+const permissionReady = ref(false);
+const loginScreenReadable = computed(() => permissionReady.value && permissionStore?.loaded
+  && permissionStore.canAccess('/api/admin/sys/login-screens/*'));
 function goPermission() { router.push('/system/permission'); }
 
 // 后端 LocalDateTime 返回 ISO 字符串（2026-04-07T19:20:37），截到分钟方便阅读
@@ -364,6 +384,72 @@ const userDlg = reactive({
   show: false, role: null, loading: false,
   rows: [], pageNo: 1, pageSize: 20, total: 0
 });
+const LOGIN_SCREEN_TARGETS = Object.freeze([
+  { value: 'WORKSPACE', label: '工作台' }, { value: 'PERSONAL', label: '个人经营大屏' },
+  { value: 'BRANCH', label: '支行经营大屏' }, { value: 'PROVINCE', label: '分行经营总览' },
+  { value: 'RETAIL', label: '零售经营大屏' }, { value: 'CORPORATE', label: '对公经营大屏' }
+]);
+const loginScreenDlg = reactive({ show: false, role: null, loading: false, loaded: false, editable: false, saving: false, conflict: false, error: '', form: { target: 'WORKSPACE', priority: 100, reason: '', expectedVersion: '' } });
+let loginScreenGeneration = 0;
+function canReadLoginScreen() {
+  return loginScreenReadable.value;
+}
+async function openLoginScreenDlg(row) {
+  loginScreenDlg.saving = false;
+  loginScreenDlg.role = row;
+  loginScreenDlg.show = true; loginScreenDlg.loading = true; loginScreenDlg.loaded = false; loginScreenDlg.editable = false; loginScreenDlg.conflict = false; loginScreenDlg.error = '';
+  loginScreenDlg.form = { target: 'WORKSPACE', priority: 100, reason: '', expectedVersion: '' };
+  const generation = ++loginScreenGeneration;
+  if (!canReadLoginScreen()) { loginScreenDlg.loading = false; loginScreenDlg.error = '当前权限快照未确认或无权配置登录首屏'; return; }
+  try {
+    const result = await getRoleLoginScreen(row.roleId);
+    if (generation !== loginScreenGeneration || loginScreenDlg.role?.roleId !== row.roleId) return;
+    const target = String(result?.target || '');
+    const priority = result?.priority;
+    if (String(result?.roleId || '') !== String(row.roleId) || !LOGIN_SCREEN_TARGETS.some(item => item.value === target)
+      || !Number.isInteger(priority) || priority < 0 || priority > 10000 || typeof result?.version !== 'string') {
+      throw new Error('登录首屏配置响应无效');
+    }
+    loginScreenDlg.form.target = target;
+    loginScreenDlg.form.priority = priority;
+    loginScreenDlg.form.expectedVersion = String(result.version || '');
+    loginScreenDlg.editable = result.editable === true;
+    loginScreenDlg.loaded = true;
+  } catch (error) { if (generation === loginScreenGeneration) { loginScreenDlg.error = `读取登录首屏失败：${error?.message || error}`; ElMessage.error(loginScreenDlg.error); } }
+  finally { if (generation === loginScreenGeneration) loginScreenDlg.loading = false; }
+}
+async function saveLoginScreenDlg() {
+  if (!loginScreenDlg.loaded || !loginScreenDlg.editable || loginScreenDlg.loading || loginScreenDlg.saving || !canReadLoginScreen()) return;
+  const reason = String(loginScreenDlg.form.reason || '').trim();
+  if (!reason) { ElMessage.error('请填写变更原因'); return; }
+  loginScreenDlg.saving = true;
+  loginScreenDlg.conflict = false;
+  const token = loginScreenGeneration;
+  const roleId = loginScreenDlg.role?.roleId;
+  const snapshot = { target: loginScreenDlg.form.target, priority: loginScreenDlg.form.priority, expectedVersion: loginScreenDlg.form.expectedVersion, user: userStore.user };
+  const current = () => token === loginScreenGeneration && loginScreenDlg.show && loginScreenDlg.role?.roleId === roleId
+    && userStore.user === snapshot.user && loginScreenDlg.form.target === snapshot.target
+    && Number(loginScreenDlg.form.priority) === Number(snapshot.priority) && loginScreenDlg.form.expectedVersion === snapshot.expectedVersion;
+  try {
+    const result = await saveRoleLoginScreen(loginScreenDlg.role.roleId, {
+      target: loginScreenDlg.form.target, priority: loginScreenDlg.form.priority,
+      expectedVersion: loginScreenDlg.form.expectedVersion || '', reason
+    });
+    if (!current()) return;
+    const reread = await getRoleLoginScreen(loginScreenDlg.role.roleId);
+    if (!current()) return;
+    if (reread?.target !== loginScreenDlg.form.target || Number(reread?.priority) !== Number(loginScreenDlg.form.priority) || !reread?.version || (result?.version && reread.version !== result.version)) throw new Error('保存回读不一致');
+    loginScreenDlg.form.expectedVersion = reread.version;
+    loginScreenDlg.show = false;
+    ElMessage.success('登录首屏已保存');
+  } catch (error) {
+    if (!current()) return;
+    const conflict = Number(error?.response?.status || error?.status) === 409 || String(error?.code || '').toUpperCase().includes('CONFLICT') || String(error?.code || '').toUpperCase() === 'GOV-40910';
+    loginScreenDlg.conflict = conflict;
+    ElMessage.error(conflict ? '配置版本已变化，请点击“重新读取”后再保存' : `保存失败：${error?.message || error}`);
+  }
+  finally { if (token === loginScreenGeneration) loginScreenDlg.saving = false; }
+}
 function openUsers(row) {
   userDlg.role = row;
   userDlg.pageNo = 1;
@@ -381,7 +467,13 @@ async function loadRoleUsers() {
   finally { userDlg.loading = false; }
 }
 
-onMounted(reload);
+async function loadLoginScreenPermission() {
+  try { if (!permissionStore) throw new Error('permission store unavailable'); await permissionStore.load(); permissionReady.value = true; } catch { permissionReady.value = false; }
+}
+onMounted(() => { void loadLoginScreenPermission(); void reload(); });
+watch(() => loginScreenDlg.show, (show) => { if (!show) loginScreenGeneration += 1; });
+watch(() => userStore.user, () => { loginScreenGeneration += 1; loginScreenDlg.show = false; });
+onBeforeUnmount(() => { loginScreenGeneration += 1; });
 </script>
 
 <style lang="scss" scoped>
