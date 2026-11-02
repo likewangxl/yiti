@@ -115,9 +115,12 @@
               :aria-pressed="configurationContext === context.key" :disabled="writing || loading" @click="changeConfigurationContext(context.key)">{{ context.label }}</button>
           </nav>
           <BranchConfigThumbnail v-if="useBranchThumbnail || configurationContext !== 'screen'" :entries="thumbnailEntries" :selected-key="thumbnailSelectedKey" :screen-title="thumbnailTitle"
+                                 :presentation="thumbnailPresentation" :context="configurationContext"
+                                 :canvas-width="thumbnailCanvasWidth" :canvas-height="thumbnailCanvasHeight"
                                  :disabled="writing || loading" @select="selectThumbnailEntry" />
           <OperatingConfigThumbnail v-else :entries="thumbnailEntries" :selected-key="selectedCatalogKey" :screen-title="activeScreenName"
-             :template="selectedTemplate" :presentation="hasNewDisplayPresentation ? displaySession.presentation : null"
+             :template="selectedTemplate" :presentation="thumbnailPresentation" :context="configurationContext"
+             :canvas-width="thumbnailCanvasWidth" :canvas-height="thumbnailCanvasHeight"
              :view-level="screenScope.viewLevel" :disabled="writing || loading" @select="selectCatalogEntry" />
           <nav v-if="drillCatalogEntries.length" class="panorama-bindings__drill-links" aria-label="下钻页面配置">
             <h3>下钻页面</h3>
@@ -1015,6 +1018,10 @@ const thumbnailSelectedKey = computed(() => configurationContext.value === 'bran
   ? drillConfiguration.value.branchEntries.find(entry=>entry.parentKey===selectedCatalogKey.value)?.key || selectedCatalogKey.value : selectedCatalogKey.value);
 const thumbnailTitle = computed(() => configurationContext.value === 'city' ? '城市经营总览'
   : configurationContext.value === 'branch' ? '支行经营总览' : activeScreenName.value);
+const thumbnailPresentation = computed(() => hasNewDisplayPresentation.value
+  ? displaySession.value.presentation : canvasStyle.value?.presentation || null);
+const thumbnailCanvasWidth = computed(() => Number(canvasStyle.value?.designWidth) > 0 ? Number(canvasStyle.value.designWidth) : 1920);
+const thumbnailCanvasHeight = computed(() => Number(canvasStyle.value?.designHeight) > 0 ? Number(canvasStyle.value.designHeight) : 1080);
 
 function changeConfigurationContext(context) {
   if (writing.value || loading.value) return;
