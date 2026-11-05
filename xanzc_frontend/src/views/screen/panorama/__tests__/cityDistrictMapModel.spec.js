@@ -61,7 +61,7 @@ describe('cityDistrictMapModel', () => {
     expect(result.hasUnknownLocations).toBe(false);
     expect(result.viewFit.focusRegionCodes).toEqual(['D-A', 'D-B']);
     expect(result.viewFit.focusCenterMode).toBe('OCCUPIED_BOUNDS');
-    expect(result.viewFit.initialZoom).toBe(1.65);
+    expect(result.viewFit.initialZoom).toBe(6.6);
     expect(result.viewFit.focusCenterSource).toBe('INSTITUTION_POINTS');
     expect(result.viewFit.focusCenter).toEqual({ lng: 0.2, lat: 0.2 });
   });
@@ -86,12 +86,12 @@ describe('cityDistrictMapModel', () => {
       { orgCode: 'OUT', located: true, lng: 99, lat: 99, coordSys: 'GCJ02', districtCode: 'D-A' }
     ], { businessLine: 'COMMON', cityCode: '610100' });
     expect(xiAn.viewFit.focusCenter).toEqual({ lng: 0.2, lat: 0.2 });
-    expect(xiAn.viewFit.initialZoom).toBe(1.65);
+    expect(xiAn.viewFit.initialZoom).toBe(6.6);
 
     const otherCity = buildCityDistrictMapState(geoJson, [
       { orgCode: 'IN', located: true, lng: 0.2, lat: 0.2, coordSys: 'GCJ02' }
     ], { businessLine: 'COMMON', cityCode: '610300' });
-    expect(otherCity.viewFit.initialZoom).toBe(1.65);
+    expect(otherCity.viewFit.initialZoom).toBe(6.6);
     expect(otherCity.viewFit.focusCenterSource).toBe('REGION_BOUNDS');
     expect(otherCity.viewFit.focusCenter).toEqual({ lng: 0.5, lat: 0.5 });
   });
@@ -107,7 +107,7 @@ describe('cityDistrictMapModel', () => {
     const focused = buildCityDistrictMapState(withBeilin, [
       { orgCode: 'A', located: true, lng: 0.2, lat: 0.2, coordSys: 'GCJ02', districtCode: 'D-A' }
     ], { businessLine: 'COMMON', cityCode: '610100' });
-    expect(focused.viewFit.initialZoom).toBe(1.65);
+    expect(focused.viewFit.initialZoom).toBe(6.6);
     expect(focused.viewFit.focusCenterSource).toBe('BEILIN_DISTRICT');
     expect(focused.viewFit.focusCenter).toEqual({ lng: 11, lat: 11 });
 
