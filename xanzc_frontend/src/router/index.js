@@ -494,7 +494,9 @@ router.beforeEach(async (to) => {
       if (shouldShowRestoredLoginScreen(user, to.path)) {
         const menus = useMenuStore();
         await menus.load();
-        if (menus.hasUrl('/workspace')) return { path: '/login-landing', replace: true };
+        // 首屏解析会再次校验工作台/大屏权限；恢复会话不能因缺少工作台菜单
+        // 而跳过用户已授权的经营大屏。
+        return { path: '/login-landing', replace: true };
       }
       return checkDeclaredRouteAccess(to);
     }

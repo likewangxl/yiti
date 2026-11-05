@@ -21,10 +21,11 @@ beforeEach(() => {
   m.rules.mockResolvedValue({ rules: [{ roleId: 'R1', target: 'PERSONAL', priority: 100 }] });
 });
 describe('首屏加载流程', () => {
-  it('无首屏资源权限时不发请求，直接回已授权工作台', async () => {
+  it('无大屏资源权限时跳过偏好接口且不发目录请求，回已授权工作台', async () => {
     m.permission.canAccess.mockReturnValue(false);
     const w = mount(LoginLanding); await flushPromises();
-    expect(m.rules).not.toHaveBeenCalled(); expect(m.replace).toHaveBeenCalledWith('/workspace'); w.unmount();
+    expect(m.rules).not.toHaveBeenCalled(); expect(m.catalog).not.toHaveBeenCalled();
+    expect(m.replace).toHaveBeenCalledWith({ name: 'PersonalDashboard', query: { from: 'login' } }); w.unmount();
   });
   it('query不能绕过菜单授权跳到任意路径', async () => {
     m.query.redirect = '/system/users'; const w = mount(LoginLanding); await flushPromises();
@@ -43,11 +44,19 @@ describe('首屏加载流程', () => {
     finish({ rules: [{ roleId: 'R1', target: 'PERSONAL', priority: 100 }] }); await flushPromises();
     expect(m.replace).not.toHaveBeenCalled();
   });
-  it('读取错误自动回工作台，401保持登录失效处理', async () => {
+  it('读取错误自动回个人驾驶舱，401保持登录失效处理', async () => {
     m.rules.mockRejectedValue(new Error('network')); let w = mount(LoginLanding); await flushPromises();
     expect(m.replace).toHaveBeenCalledWith('/workspace'); w.unmount(); m.replace.mockClear();
     m.rules.mockRejectedValue({ response: { status: 401 } }); w = mount(LoginLanding); await flushPromises();
     expect(m.replace).toHaveBeenCalledWith('/login'); w.unmount();
+  });
+  it('规则接口无权读取时继续解析默认大屏目录', async () => {
+    m.rules.mockRejectedValue({ response: { status: 403 } });
+    m.catalog.mockResolvedValue([]);
+    const w = mount(LoginLanding); await flushPromises();
+    expect(m.catalog).toHaveBeenCalled();
+    expect(m.replace).toHaveBeenCalledWith({ name: 'PersonalDashboard', query: { from: 'login' } });
+    w.unmount();
   });
   it('同工号重新建立身份后也丢弃旧请求', async () => {
     let finish; m.rules.mockImplementation(() => new Promise(resolve => { finish = resolve; }));

@@ -1,20 +1,29 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { http } = vi.hoisted(() => ({ http: { get: vi.fn(), put: vi.fn() } }));
-vi.mock('../http', () => ({ default: http }));
-import { getRoleLoginScreen, saveRoleLoginScreen } from '../loginScreen';
+const mocks = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn() }));
+vi.mock('../http', () => ({ default: { get: mocks.get, put: mocks.put } }));
 
-describe('loginScreen API', () => {
+import { getLoginScreenRules, getRoleLoginScreen, saveRoleLoginScreen } from '../loginScreen';
+
+describe('登录首屏规则 API', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('规则查询静默请求，便于 403/404 按默认大屏回退', () => {
+    getLoginScreenRules();
+    expect(mocks.get).toHaveBeenCalledWith('/api/sys/login-screens', { silent: true });
+  });
+
   it('PUT sends request body directly and encodes role id', async () => {
-    http.put.mockResolvedValue({});
+    mocks.put.mockResolvedValue({});
     await saveRoleLoginScreen('R/A', { target: 'PERSONAL', priority: 1, expectedVersion: '', reason: 'test' });
-    expect(http.put).toHaveBeenCalledWith('/api/admin/sys/login-screens/R%2FA', {
+    expect(mocks.put).toHaveBeenCalledWith('/api/admin/sys/login-screens/R%2FA', {
       target: 'PERSONAL', priority: 1, expectedVersion: '', reason: 'test'
     });
   });
-  it('GET encodes role id', async () => {
-    http.get.mockResolvedValue({});
+
+  it('GET encodes role id without inheriting the landing request silent option', async () => {
+    mocks.get.mockResolvedValue({});
     await getRoleLoginScreen('R/A');
-    expect(http.get).toHaveBeenCalledWith('/api/admin/sys/login-screens/R%2FA');
+    expect(mocks.get).toHaveBeenCalledWith('/api/admin/sys/login-screens/R%2FA');
   });
 });

@@ -30,13 +30,16 @@ describe('登录首屏授权解析', () => {
     expect(await resolveLoginScreen(f)).toEqual({ name: 'BranchOperatingPage', query: {
       from: 'login', orgCode: 'B01', cityCode: 'CITY1', sourceScreenCode: 'SCR_PROVINCE', businessLine: 'COMMON' } });
   });
-  it.each(['missingOrg', 'unknownLayer', 'missingCity', 'draft'])('支行 %s 时回退工作台', async kind => {
+  it.each(['missingOrg', 'unknownLayer', 'missingCity'])('支行 %s 时尝试默认分行屏', async kind => {
     const f = fixture('BRANCH'); const view = await f.getScreenView();
     if (kind === 'missingOrg') f.user.mainOrgCode = 'B99';
     if (kind === 'unknownLayer') view.institutionRules = {};
     if (kind === 'missingCity') view.panoramaInstitutions[0].cityCode = '';
-    if (kind === 'draft') view.state = 'draft';
-    expect(await resolveLoginScreen(f)).toBe('/workspace');
+    expect(await resolveLoginScreen(f)).toEqual({ name: 'CodeScreenPage', params: { template: 'branch-overview-v1' }, query: { from: 'login' } });
+  });
+  it('支行草稿且无其他可用屏时回退个人驾驶舱', async () => {
+    const f = fixture('BRANCH'); const view = await f.getScreenView(); view.state = 'draft';
+    expect(await resolveLoginScreen(f)).toEqual({ name: 'PersonalDashboard', query: { from: 'login' } });
   });
   it('401不得被备用大屏或工作台覆盖', async () => {
     const f = fixture('PROVINCE'); const error = { response: { status: 401 } };
@@ -49,10 +52,10 @@ describe('登录首屏授权解析', () => {
     });
     expect(await resolveLoginScreen({ ...f, isCurrent: () => f.isCurrent() })).toBeNull();
   });
-  it('显式WORKSPACE停止备用规则，其他用户的规则不能参与', async () => {
+  it('显式WORKSPACE不阻断同一用户其他已配置的大屏规则', async () => {
     const f = fixture('WORKSPACE');
     f.payload.rules.push({ roleId: 'R2', target: 'PERSONAL', priority: 0 }, { roleId: 'FOREIGN', target: 'RETAIL', priority: 0 });
-    expect(await resolveLoginScreen(f)).toBe('/workspace');
+    expect(await resolveLoginScreen(f)).toEqual({ name: 'PersonalDashboard', query: { from: 'login' } });
     expect(f.listAvailableScreens).not.toHaveBeenCalled();
   });
   it('网络故障拒绝展示任何候选', async () => {

@@ -35,6 +35,37 @@ export function selectLoginScreenTarget(user, payload) {
   return orderedLoginScreenRules(user, payload)[0]?.target || 'WORKSPACE';
 }
 
+function isSystemAdminLike(user) {
+  if (user?.isSystemAdmin === true) return true;
+  return (Array.isArray(user?.roles) ? user.roles : []).some(role => {
+    if (typeof role === 'string') return role === 'SYS_ADMIN';
+    return role?.roleCode === 'SYS_ADMIN' || role?.roleId === 'SYS_ADMIN';
+  });
+}
+
+function candidateRules(user, payload) {
+  const configured = orderedLoginScreenRules(user, payload).filter(rule => rule.target !== 'WORKSPACE');
+  const seen = new Set(configured.map(rule => rule.target));
+  // Defaults are preferences only; each candidate still passes the normal screen,
+  // publication and institution authorization checks below.
+  const defaults = ['PROVINCE', 'RETAIL', 'CORPORATE'];
+  const fallbackRules = defaults
+    .filter(target => !seen.has(target))
+    .map((target, index) => ({ roleId: `__default_${target}`, target, priority: 10001 + index }));
+  if (isSystemAdminLike(user)) {
+    const province = configured.find(rule => rule.target === 'PROVINCE')
+      || { roleId: '__default_PROVINCE', target: 'PROVINCE', priority: 10001 };
+    const restConfigured = configured.filter(rule => rule.target !== 'PROVINCE');
+    const restDefaults = fallbackRules.filter(rule => rule.target !== 'PROVINCE');
+    const result = [province, ...restConfigured, ...restDefaults];
+    if (!seen.has('PERSONAL')) result.push({ roleId: '__default_PERSONAL', target: 'PERSONAL', priority: 10004 });
+    return result;
+  }
+  const result = [...configured, ...fallbackRules];
+  if (!seen.has('PERSONAL')) result.push({ roleId: '__default_PERSONAL', target: 'PERSONAL', priority: 10004 });
+  return result;
+}
+
 /** 固定目标生成路由，支行必须携带已验证的父屏机构上下文。 */
 export function targetRoute(target, user, authorized = null) {
   if (target === 'PERSONAL') return { name: 'PersonalDashboard', query: { from: 'login' } };
@@ -65,9 +96,8 @@ function validPublishedPackage(view, entry) {
 export async function resolveLoginScreen({ user, payload, menuStore, permissionStore, listAvailableScreens, getScreenView, isCurrent = () => true }) {
   const fallback = () => menuStore.resolveLandingPath();
   let catalog;
-  for (const rule of orderedLoginScreenRules(user, payload)) {
+  for (const rule of candidateRules(user, payload)) {
     if (!isCurrent()) return null;
-    if (rule.target === 'WORKSPACE') return fallback();
     if (rule.target === 'PERSONAL') {
       if (menuStore.hasUrl('/workspace')) return targetRoute('PERSONAL', user);
       continue;

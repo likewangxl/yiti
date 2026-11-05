@@ -164,11 +164,9 @@ async function onSubmit() {
       // 登录首屏只接管默认入口；明确业务深链接仍回到原目标。
       if (redirect && !['/', '/workspace', '/login-landing'].includes(redirect.split(/[?#]/)[0]) && menuStore.isAuthorizedRedirect(redirect)) {
         landingPath = menuStore.resolveLandingPath(redirect);
-      } else if (menuStore.hasUrl('/workspace')) {
-        // 生产菜单已确认工作台权限后，再进入首屏选择页。
-        landingPath = '/login-landing';
       } else {
-        landingPath = menuStore.resolveLandingPath();
+        // 默认入口统一交给首屏解析；它会按当前用户的屏级、机构和工作台权限选择落点。
+        landingPath = '/login-landing';
       }
     } catch (error) {
       // 登录已成功，但授权菜单不可用时 fail-close 到说明页，不能沿用上一用户菜单。

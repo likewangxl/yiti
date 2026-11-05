@@ -102,10 +102,10 @@ describe('登录成功后菜单强制重拉（换用户菜单残留回归）', (
     await wrapper.findAll('button').find(b => b.text().includes('登')).trigger('click');
     await settle();
 
-    expect(routerReplace).toHaveBeenCalledWith('/redengine/dashboard');
+    expect(routerReplace).toHaveBeenCalledWith('/login-landing');
   });
 
-  it('无授权菜单时进入 no-access，同源但未授权的 redirect 也不能绕过', async () => {
+  it('无授权菜单时先进入首屏解析，同源但未授权的 redirect 也不能绕过', async () => {
     getMyMenus.mockResolvedValue([]);
     wrapper = mount(Login, { global: { plugins: [pinia], stubs } });
     let inputs = wrapper.findAll('.inp-stub');
@@ -113,7 +113,7 @@ describe('登录成功后菜单强制重拉（换用户菜单残留回归）', (
     await inputs[1].setValue('pwd123456');
     await wrapper.findAll('button').find(b => b.text().includes('登')).trigger('click');
     await settle();
-    expect(routerReplace).toHaveBeenLastCalledWith('/no-access');
+    expect(routerReplace).toHaveBeenLastCalledWith('/login-landing');
 
     wrapper.unmount();
     testState.routeQuery = { normal: '', redirect: '/redengine/records' };
@@ -123,7 +123,7 @@ describe('登录成功后菜单强制重拉（换用户菜单残留回归）', (
     await inputs[1].setValue('pwd123456');
     await wrapper.findAll('button').find(b => b.text().includes('登')).trigger('click');
     await settle();
-    expect(routerReplace).toHaveBeenLastCalledWith('/no-access');
+    expect(routerReplace).toHaveBeenLastCalledWith('/login-landing');
   });
 
   it('只恢复精确菜单、菜单详情子路径或已获模块入口的红色路由', async () => {

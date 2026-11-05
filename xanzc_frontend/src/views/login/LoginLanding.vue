@@ -56,8 +56,18 @@ async function open() {
     }
     await permissionStore.load();
     if (!isCurrent()) return;
-    if (!permissionStore.canAccess('/api/sys/login-screens')) { router.replace(workspace()); return; }
-    const payload = await getLoginScreenRules();
+    let payload;
+    if (!permissionStore.canAccess('/api/sys/login-screens')) {
+      payload = { rules: [] };
+    } else try {
+      payload = await getLoginScreenRules();
+    } catch (error) {
+      const status = Number(error?.response?.status || error?.status);
+      // 首屏规则是偏好配置，不是屏级授权；无权读取配置时继续走固定
+      // 大屏目录的授权校验。会话失效、网络故障和格式错误仍进入统一失败处理。
+      if (status === 403 || status === 404) payload = { rules: [] };
+      else throw error;
+    }
     if (!isCurrent()) return;
     const destination = await resolveLoginScreen({ user, payload, menuStore, permissionStore,
       listAvailableScreens, getScreenView, isCurrent });

@@ -28,3 +28,10 @@ it('恢复会话到业务深链接不强插首屏', async () => {
   await router.push('/system/roles');
   expect(router.currentRoute.value.path).toBe('/system/roles');
 });
+
+it('恢复会话无工作台菜单但有大屏入口时仍进入首屏解析', async () => {
+  resetLoginScreenShown();
+  getMyMenus.mockResolvedValue([{ resourceUrl: '/screen-pages/branch-overview-v1', menuName: '分行经营总览' }]);
+  await router.push('/workspace');
+  expect(router.currentRoute.value.path).toBe('/login-landing');
+});

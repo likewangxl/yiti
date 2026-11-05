@@ -193,6 +193,6 @@ describe('普通登录提交状态与错误恢复', () => {
     await submit.trigger('click');
     await settle();
     expect(mocks.login).toHaveBeenCalledTimes(2);
-    expect(mocks.routerReplace).toHaveBeenCalledWith('/no-access');
+    expect(mocks.routerReplace).toHaveBeenCalledWith('/login-landing');
   });
 });
