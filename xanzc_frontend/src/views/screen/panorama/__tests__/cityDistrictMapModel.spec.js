@@ -61,7 +61,7 @@ describe('cityDistrictMapModel', () => {
     expect(result.hasUnknownLocations).toBe(false);
     expect(result.viewFit.focusRegionCodes).toEqual(['D-A', 'D-B']);
     expect(result.viewFit.focusCenterMode).toBe('OCCUPIED_BOUNDS');
-    expect(result.viewFit.initialZoom).toBe(3.3);
+    expect(result.viewFit.initialZoom).toBe(1.65);
     expect(result.viewFit.focusCenterSource).toBe('INSTITUTION_POINTS');
     expect(result.viewFit.focusCenter).toEqual({ lng: 0.2, lat: 0.2 });
   });
@@ -86,14 +86,36 @@ describe('cityDistrictMapModel', () => {
       { orgCode: 'OUT', located: true, lng: 99, lat: 99, coordSys: 'GCJ02', districtCode: 'D-A' }
     ], { businessLine: 'COMMON', cityCode: '610100' });
     expect(xiAn.viewFit.focusCenter).toEqual({ lng: 0.2, lat: 0.2 });
-    expect(xiAn.viewFit.initialZoom).toBe(3.3);
+    expect(xiAn.viewFit.initialZoom).toBe(1.65);
 
     const otherCity = buildCityDistrictMapState(geoJson, [
       { orgCode: 'IN', located: true, lng: 0.2, lat: 0.2, coordSys: 'GCJ02' }
     ], { businessLine: 'COMMON', cityCode: '610300' });
-    expect(otherCity.viewFit.initialZoom).toBe(3.3);
+    expect(otherCity.viewFit.initialZoom).toBe(1.65);
     expect(otherCity.viewFit.focusCenterSource).toBe('REGION_BOUNDS');
     expect(otherCity.viewFit.focusCenter).toEqual({ lng: 0.5, lat: 0.5 });
+  });
+
+  it('西安 COMMON 优先聚焦真实碑林区边界中心，缺碑林区才回退网点中心', () => {
+    const withBeilin = {
+      ...geoJson,
+      features: [...geoJson.features, {
+        type: 'Feature', properties: { adcode: '610103', name: '碑林区' },
+        geometry: { type: 'Polygon', coordinates: [[[10, 10], [12, 10], [12, 12], [10, 12], [10, 10]]] }
+      }]
+    };
+    const focused = buildCityDistrictMapState(withBeilin, [
+      { orgCode: 'A', located: true, lng: 0.2, lat: 0.2, coordSys: 'GCJ02', districtCode: 'D-A' }
+    ], { businessLine: 'COMMON', cityCode: '610100' });
+    expect(focused.viewFit.initialZoom).toBe(1.65);
+    expect(focused.viewFit.focusCenterSource).toBe('BEILIN_DISTRICT');
+    expect(focused.viewFit.focusCenter).toEqual({ lng: 11, lat: 11 });
+
+    const fallback = buildCityDistrictMapState(geoJson, [
+      { orgCode: 'A', located: true, lng: 0.2, lat: 0.2, coordSys: 'GCJ02' }
+    ], { businessLine: 'COMMON', cityCode: '610100' });
+    expect(fallback.viewFit.focusCenterSource).toBe('INSTITUTION_POINTS');
+    expect(fallback.viewFit.focusCenter).toEqual({ lng: 0.2, lat: 0.2 });
   });
 
   it('区县分类色按行政代码稳定映射，GeoJSON 乱序及 MultiPolygon 不会改变颜色', () => {

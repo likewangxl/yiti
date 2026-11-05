@@ -412,7 +412,8 @@ const cityFocus = computed(() => {
   const lat = Number(pair[1]);
   const occupiedBoundsCenter = pointBoundsCenter(focusedRegions.flatMap(region => region.outer));
   const center = props.viewFit?.focusCenterMode === 'OCCUPIED_BOUNDS'
-    && props.viewFit?.focusCenterSource !== 'INSTITUTION_POINTS' && occupiedBoundsCenter
+    && !['INSTITUTION_POINTS', 'BEILIN_DISTRICT'].includes(props.viewFit?.focusCenterSource)
+    && occupiedBoundsCenter
     ? occupiedBoundsCenter
     : Number.isFinite(lng) && Number.isFinite(lat)
       ? projection.value.project([lng, lat])

@@ -103,4 +103,43 @@ describe('市级地图初始缩放', () => {
     expect(province.attributes('data-zoom')).toBe('1.00');
     province.unmount();
   });
+
+  it('碑林显式中心驱动 SVG 取景，重置后中心与倍率恢复一致', async () => {
+    const beilin = mount(PanoramaMap, {
+      props: {
+        geoJson: cityGeo,
+        mode: 'city',
+        viewFit: {
+          focusRegionCodes: ['D-A'],
+          focusCenterMode: 'OCCUPIED_BOUNDS',
+          focusCenterSource: 'BEILIN_DISTRICT',
+          focusCenter: { lng: 108.2, lat: 34.5 },
+          initialZoom: 1.65
+        }
+      }
+    });
+    const region = mount(PanoramaMap, {
+      props: {
+        geoJson: cityGeo,
+        mode: 'city',
+        viewFit: {
+          focusRegionCodes: ['D-A'],
+          focusCenterMode: 'OCCUPIED_BOUNDS',
+          focusCenterSource: 'REGION_BOUNDS',
+          focusCenter: { lng: 108.5, lat: 34.5 },
+          initialZoom: 1.65
+        }
+      }
+    });
+    await nextTick();
+    const initialPath = beilin.get('path[data-region-code="D-A"]').attributes('d');
+    const regionPath = region.get('path[data-region-code="D-A"]').attributes('d');
+    expect(initialPath).not.toBe(regionPath);
+    await beilin.get('button[aria-label="放大地图"]').trigger('click');
+    await beilin.get('button[aria-label="重置地图视图"]').trigger('click');
+    expect(beilin.attributes('data-zoom')).toBe('1.65');
+    expect(beilin.get('path[data-region-code="D-A"]').attributes('d')).toBe(initialPath);
+    beilin.unmount();
+    region.unmount();
+  });
 });

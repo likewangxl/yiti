@@ -225,19 +225,20 @@ export function buildCityDistrictMapState(geoJson, institutions, { demo = false,
     if (centers.length) {
       viewFit.focusRegionCodes = occupiedRegionCodes;
       viewFit.focusCenterMode = 'OCCUPIED_BOUNDS';
-      // 分行市级下钻默认放大到原取景的两倍，让有网点的城区占据主要视窗。
-      // 行政区边界仍使用真实 GeoJSON，避免为压缩无网点区域而变形地图。
       const isXiAn = String(cityCode) === '610100' || codes.includes('610116');
-      const pointFocusEnabled = businessLine === 'COMMON' && isXiAn;
-      viewFit.initialZoom = businessLine === 'COMMON' ? 3.3 : 1.65;
-      const pointCenter = pointFocusEnabled && locatedPoints.length
+      const xiAnFocusEnabled = businessLine === 'COMMON' && isXiAn;
+      const beilinCenter = xiAnFocusEnabled && features.has('610103')
+        ? featureCenter(features.get('610103').polygons)
+        : null;
+      const pointCenter = xiAnFocusEnabled && !beilinCenter && locatedPoints.length
         ? locatedPoints.reduce((center, [lng, lat]) => ({
           lng: center.lng + lng / locatedPoints.length,
           lat: center.lat + lat / locatedPoints.length
         }), { lng: 0, lat: 0 })
         : null;
-      viewFit.focusCenterSource = pointCenter ? 'INSTITUTION_POINTS' : 'REGION_BOUNDS';
-      viewFit.focusCenter = (pointCenter || centers.reduce((center, item) => ({
+      viewFit.initialZoom = 1.65;
+      viewFit.focusCenterSource = beilinCenter ? 'BEILIN_DISTRICT' : pointCenter ? 'INSTITUTION_POINTS' : 'REGION_BOUNDS';
+      viewFit.focusCenter = (beilinCenter || pointCenter || centers.reduce((center, item) => ({
         lng: center.lng + item.lng / centers.length,
         lat: center.lat + item.lat / centers.length
       }), { lng: 0, lat: 0 }));

@@ -107,7 +107,7 @@ export function pointBoundsCenter(points) {
 
 /** 选择 relief 相机中心；网点聚焦直接使用已投影的网点中心，避免再减一次区域中心。 */
 export function resolveReliefFocusCenter(source, institutionCenter, regionCenter) {
-  if (source === 'INSTITUTION_POINTS' && institutionCenter) return institutionCenter;
+  if (['INSTITUTION_POINTS', 'BEILIN_DISTRICT'].includes(source) && institutionCenter) return institutionCenter;
   if (institutionCenter && regionCenter) {
     return { x: regionCenter.x - institutionCenter.x, y: regionCenter.y - institutionCenter.y };
   }

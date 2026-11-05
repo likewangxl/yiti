@@ -14,6 +14,8 @@ describe('mapReliefGeometry', () => {
   it('网点取景中心直接作为 camera-space 中心，区域取景仍使用区域中心', () => {
     expect(resolveReliefFocusCenter('INSTITUTION_POINTS', { x: -3, y: 2 }, { x: 4, y: 5 }))
       .toEqual({ x: -3, y: 2 });
+    expect(resolveReliefFocusCenter('BEILIN_DISTRICT', { x: -3, y: 2 }, { x: 4, y: 5 }))
+      .toEqual({ x: -3, y: 2 });
     expect(resolveReliefFocusCenter('REGION_BOUNDS', { x: -3, y: 2 }, { x: 4, y: 5 }))
       .toEqual({ x: 7, y: 3 });
   });
