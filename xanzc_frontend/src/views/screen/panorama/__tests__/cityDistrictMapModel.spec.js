@@ -46,7 +46,7 @@ describe('cityDistrictMapModel', () => {
     const result = buildCityDistrictMapState(geoJson, [
       { orgCode: 'A', located: true, lng: 0.2, lat: 0.2, coordSys: 'GCJ02' },
       { orgCode: 'B', located: false, districtCode: 'D-B' }
-    ]);
+    ], { cityCode: '610100' });
 
     expect(result.regionStates).toEqual({ 'D-A': 'HAS_INSTITUTION', 'D-B': 'HAS_INSTITUTION', 'D-C': 'NO_INSTITUTION' });
     expect(result.occupiedRegionCodes).toEqual(['D-A', 'D-B']);
@@ -61,8 +61,39 @@ describe('cityDistrictMapModel', () => {
     expect(result.hasUnknownLocations).toBe(false);
     expect(result.viewFit.focusRegionCodes).toEqual(['D-A', 'D-B']);
     expect(result.viewFit.focusCenterMode).toBe('OCCUPIED_BOUNDS');
-    expect(result.viewFit.initialZoom).toBe(1.65);
-    expect(result.viewFit.focusCenter).toEqual({ lng: 1, lat: 0.5 });
+    expect(result.viewFit.initialZoom).toBe(3.3);
+    expect(result.viewFit.focusCenterSource).toBe('INSTITUTION_POINTS');
+    expect(result.viewFit.focusCenter).toEqual({ lng: 0.2, lat: 0.2 });
+  });
+
+  it('零售和对公市级地图保留原始取景倍率与行政区中心，不使用分行网点聚焦', () => {
+    const retail = buildCityDistrictMapState(geoJson, [
+      { orgCode: 'A', located: true, lng: 0.2, lat: 0.2, coordSys: 'GCJ02' }
+    ], { businessLine: 'RETAIL', cityCode: '610100' });
+    const corp = buildCityDistrictMapState(geoJson, [
+      { orgCode: 'A', located: true, lng: 0.2, lat: 0.2, coordSys: 'GCJ02' }
+    ], { businessLine: 'CORP', cityCode: '610100' });
+    for (const result of [retail, corp]) {
+      expect(result.viewFit.initialZoom).toBe(1.65);
+      expect(result.viewFit.focusCenterSource).toBe('REGION_BOUNDS');
+      expect(result.viewFit.focusCenter).toEqual({ lng: 0.5, lat: 0.5 });
+    }
+  });
+
+  it('西安分行取景忽略越界坐标，其他城市即使是 COMMON 也保持区域中心', () => {
+    const xiAn = buildCityDistrictMapState(geoJson, [
+      { orgCode: 'IN', located: true, lng: 0.2, lat: 0.2, coordSys: 'GCJ02' },
+      { orgCode: 'OUT', located: true, lng: 99, lat: 99, coordSys: 'GCJ02', districtCode: 'D-A' }
+    ], { businessLine: 'COMMON', cityCode: '610100' });
+    expect(xiAn.viewFit.focusCenter).toEqual({ lng: 0.2, lat: 0.2 });
+    expect(xiAn.viewFit.initialZoom).toBe(3.3);
+
+    const otherCity = buildCityDistrictMapState(geoJson, [
+      { orgCode: 'IN', located: true, lng: 0.2, lat: 0.2, coordSys: 'GCJ02' }
+    ], { businessLine: 'COMMON', cityCode: '610300' });
+    expect(otherCity.viewFit.initialZoom).toBe(3.3);
+    expect(otherCity.viewFit.focusCenterSource).toBe('REGION_BOUNDS');
+    expect(otherCity.viewFit.focusCenter).toEqual({ lng: 0.5, lat: 0.5 });
   });
 
   it('区县分类色按行政代码稳定映射，GeoJSON 乱序及 MultiPolygon 不会改变颜色', () => {

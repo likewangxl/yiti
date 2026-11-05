@@ -306,6 +306,7 @@ import {
   smoothReliefWallNormals,
   getReliefSurfaceZ,
   pointBoundsCenter,
+  resolveReliefFocusCenter,
   isReliefAppearance
 } from './mapReliefGeometry';
 
@@ -410,7 +411,8 @@ const cityFocus = computed(() => {
   const lng = Number(pair[0]);
   const lat = Number(pair[1]);
   const occupiedBoundsCenter = pointBoundsCenter(focusedRegions.flatMap(region => region.outer));
-  const center = props.viewFit?.focusCenterMode === 'OCCUPIED_BOUNDS' && occupiedBoundsCenter
+  const center = props.viewFit?.focusCenterMode === 'OCCUPIED_BOUNDS'
+    && props.viewFit?.focusCenterSource !== 'INSTITUTION_POINTS' && occupiedBoundsCenter
     ? occupiedBoundsCenter
     : Number.isFinite(lng) && Number.isFinite(lat)
       ? projection.value.project([lng, lat])
@@ -1591,7 +1593,11 @@ function resizeRenderer() {
             const focusPoint = new THREE.Vector3(cityFocus.value.center.x, cityFocus.value.center.y, mapSurfaceZ())
               .applyMatrix4(mapGroup.matrixWorld)
               .applyMatrix4(camera.matrixWorldInverse);
-            return occupiedCenter ? { x: occupiedCenter.x - focusPoint.x, y: occupiedCenter.y - focusPoint.y } : null;
+            return resolveReliefFocusCenter(
+              props.viewFit?.focusCenterSource,
+              { x: focusPoint.x, y: focusPoint.y },
+              occupiedCenter
+            );
           })()
           : null
       });

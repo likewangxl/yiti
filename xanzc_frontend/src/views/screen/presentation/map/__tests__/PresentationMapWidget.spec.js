@@ -217,6 +217,31 @@ describe('PresentationMapWidget', () => {
     expect(wrapper.find('[data-testid="presentation-map-legend-high"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="presentation-map-legend-no-institution"]').exists()).toBe(true);
     wrapper.unmount();
+
+    const branch = mount(PresentationMapWidget, {
+      props: {
+        presentation: { ...presentation, template: 'branch-overview-v1' },
+        model: { ...model, institutions: [model.institutions[0]] },
+        geoJson: cityGeoJson,
+        mode: 'city',
+        cityCode: '610100',
+        metricKey: 'deposit'
+      },
+      global: { stubs: { PanoramaMap: mapStub } }
+    });
+    expect(branch.getComponent(mapStub).props('viewFit')).toMatchObject({ initialZoom: 3.3, focusCenterSource: 'INSTITUTION_POINTS' });
+    branch.unmount();
+
+    const retail = mount(PresentationMapWidget, {
+      props: {
+        presentation: { ...presentation, template: 'retail-overview-v1' },
+        model: { ...model, institutions: [model.institutions[0]] }, geoJson: cityGeoJson,
+        mode: 'city', cityCode: '610100', metricKey: 'deposit'
+      },
+      global: { stubs: { PanoramaMap: mapStub } }
+    });
+    expect(retail.getComponent(mapStub).props('viewFit')).toMatchObject({ initialZoom: 1.65, focusCenterSource: 'REGION_BOUNDS' });
+    retail.unmount();
   });
 
   it('city 存在未定位机构时未确认区县保持 MISSING，不伪造无机构灰色', () => {

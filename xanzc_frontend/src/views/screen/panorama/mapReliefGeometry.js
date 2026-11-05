@@ -105,6 +105,15 @@ export function pointBoundsCenter(points) {
   return { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
 }
 
+/** 选择 relief 相机中心；网点聚焦直接使用已投影的网点中心，避免再减一次区域中心。 */
+export function resolveReliefFocusCenter(source, institutionCenter, regionCenter) {
+  if (source === 'INSTITUTION_POINTS' && institutionCenter) return institutionCenter;
+  if (institutionCenter && regionCenter) {
+    return { x: regionCenter.x - institutionCenter.x, y: regionCenter.y - institutionCenter.y };
+  }
+  return regionCenter;
+}
+
 /** Fit camera-space geometry directly; a rotated world AABB would add empty corners. */
 export function fitReliefView(points, { aspect = 1, fitHeight = .88, center = null } = {}) {
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   fitReliefView,
+  resolveReliefFocusCenter,
   createReliefWallColors,
   smoothReliefWallNormals,
   RELIEF_APPEARANCE,
@@ -10,6 +11,12 @@ import {
 } from '../mapReliefGeometry';
 
 describe('mapReliefGeometry', () => {
+  it('网点取景中心直接作为 camera-space 中心，区域取景仍使用区域中心', () => {
+    expect(resolveReliefFocusCenter('INSTITUTION_POINTS', { x: -3, y: 2 }, { x: 4, y: 5 }))
+      .toEqual({ x: -3, y: 2 });
+    expect(resolveReliefFocusCenter('REGION_BOUNDS', { x: -3, y: 2 }, { x: 4, y: 5 }))
+      .toEqual({ x: 7, y: 3 });
+  });
   it('fits actual camera-space vertices with padding and retains tall geometry in a wide panel', () => {
     const points = [{x:-2,y:-5},{x:2,y:-5},{x:1,y:5},{x:-1,y:5}];
     const fit = fitReliefView(points, { aspect: 1.5, fitHeight: .88 });

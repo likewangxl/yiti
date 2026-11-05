@@ -167,7 +167,7 @@ function emptyViewFit() {
  * 未定位、非法或出界机构不能用于推断区县无机构；只有目录完整且所有机构均能
  * 确认归属时，未占用区县才进入 NO_INSTITUTION。
  */
-export function buildCityDistrictMapState(geoJson, institutions, { demo = false } = {}) {
+export function buildCityDistrictMapState(geoJson, institutions, { demo = false, businessLine = 'COMMON', cityCode = '' } = {}) {
   const polygons = collectGeoPolygons(geoJson);
   const features = new Map();
   polygons.forEach(polygon => {
@@ -182,6 +182,7 @@ export function buildCityDistrictMapState(geoJson, institutions, { demo = false 
     ? institutions.filter(item => item && typeof item === 'object' && (demo === true || !isDemoInstitution(item)))
     : [];
   const occupied = new Set();
+  const locatedPoints = [];
   let hasUnknownLocations = false;
 
   directory.forEach(institution => {
@@ -191,7 +192,13 @@ export function buildCityDistrictMapState(geoJson, institutions, { demo = false 
     if (!code && point) {
       code = codes.find(candidate => features.get(candidate).polygons.some(polygon => pointInPolygon(point, polygon))) || '';
     }
-    if (code) occupied.add(code);
+    const pointInsideGeoJson = point && codes.some(candidate => features.get(candidate).polygons
+      .some(polygon => pointInPolygon(point, polygon)));
+    if (code) {
+      occupied.add(code);
+      // 只有已确认落入当前 GeoJSON 的坐标才可参与默认取景，出界点不能偏移地图。
+      if (pointInsideGeoJson) locatedPoints.push(point);
+    }
     else hasUnknownLocations = true;
   });
 
@@ -218,11 +225,22 @@ export function buildCityDistrictMapState(geoJson, institutions, { demo = false 
     if (centers.length) {
       viewFit.focusRegionCodes = occupiedRegionCodes;
       viewFit.focusCenterMode = 'OCCUPIED_BOUNDS';
-      viewFit.initialZoom = 1.65;
-      viewFit.focusCenter = centers.reduce((center, item) => ({
+      // 分行市级下钻默认放大到原取景的两倍，让有网点的城区占据主要视窗。
+      // 行政区边界仍使用真实 GeoJSON，避免为压缩无网点区域而变形地图。
+      const isXiAn = String(cityCode) === '610100' || codes.includes('610116');
+      const pointFocusEnabled = businessLine === 'COMMON' && isXiAn;
+      viewFit.initialZoom = businessLine === 'COMMON' ? 3.3 : 1.65;
+      const pointCenter = pointFocusEnabled && locatedPoints.length
+        ? locatedPoints.reduce((center, [lng, lat]) => ({
+          lng: center.lng + lng / locatedPoints.length,
+          lat: center.lat + lat / locatedPoints.length
+        }), { lng: 0, lat: 0 })
+        : null;
+      viewFit.focusCenterSource = pointCenter ? 'INSTITUTION_POINTS' : 'REGION_BOUNDS';
+      viewFit.focusCenter = (pointCenter || centers.reduce((center, item) => ({
         lng: center.lng + item.lng / centers.length,
         lat: center.lat + item.lat / centers.length
-      }), { lng: 0, lat: 0 });
+      }), { lng: 0, lat: 0 }));
     }
   }
 

@@ -107,8 +107,15 @@ const mapModel = computed(() => buildMapModel(props.presentation, props.model, {
   geoJson: props.geoJson,
   distinguishNoInstitution: enhancedMap.value
 }));
+const cityBusinessLine = computed(() => {
+  const template = String(props.presentation?.template || '').trim();
+  if (template === 'branch-overview-v1' || String(props.presentation?.screenCode || '') === 'SCR_PROVINCE') return 'COMMON';
+  if (template === 'retail-overview-v1' || String(props.presentation?.screenCode || '') === 'SCR_RETAIL_OVERVIEW') return 'RETAIL';
+  if (template === 'corporate-overview-v1' || String(props.presentation?.screenCode || '') === 'SCR_CORP_OVERVIEW') return 'CORP';
+  return 'UNKNOWN';
+});
 const cityDistrictMapState = computed(() => props.mode === 'city'
-  ? buildCityDistrictMapState(props.geoJson, mapModel.value.institutions, { demo: props.demo })
+  ? buildCityDistrictMapState(props.geoJson, mapModel.value.institutions, { demo: props.demo, cityCode: props.cityCode, businessLine: cityBusinessLine.value })
   : { regionStates: {}, metricColors: {}, districtColors: {}, viewFit: { focusRegionCodes: [], initialZoom: 1 }, occupiedRegionCodes: [], hasUnknownLocations: false });
 const mapRegionStates = computed(() => props.mode === 'city' && Object.keys(cityDistrictMapState.value.regionStates).length
   ? cityDistrictMapState.value.regionStates : mapModel.value.regionStates);
