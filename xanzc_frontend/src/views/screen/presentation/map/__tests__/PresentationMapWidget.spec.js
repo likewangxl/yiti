@@ -229,7 +229,7 @@ describe('PresentationMapWidget', () => {
       },
       global: { stubs: { PanoramaMap: mapStub } }
     });
-    expect(branch.getComponent(mapStub).props('viewFit')).toMatchObject({ initialZoom: 6.6, focusCenterSource: 'INSTITUTION_POINTS' });
+    expect(branch.getComponent(mapStub).props('viewFit')).toMatchObject({ initialZoom: 3.3, focusCenterSource: 'INSTITUTION_POINTS' });
     branch.unmount();
 
     const retail = mount(PresentationMapWidget, {

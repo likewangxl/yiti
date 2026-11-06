@@ -26,12 +26,12 @@ function pathBounds(path) {
 describe('市级地图初始缩放', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it('分行下钻进入即为原默认四倍，以碑林为中心且重置保持四倍', async () => {
+  it('分行下钻从 6.6 缩至 3.3，以碑林为中心且重置保持 3.3', async () => {
     const geo = { ...cityGeo, features: [{ ...cityGeo.features[0], properties: { adcode: '610103', name: '碑林区' } }] };
     const { viewFit } = buildCityDistrictMapState(geo, [
       { orgCode: 'B01', lng: 108.5, lat: 34.5, located: true, coordSys: 'GCJ02' }
     ], { businessLine: 'COMMON', cityCode: '610100' });
-    const baseline = mount(PanoramaMap, { props: { geoJson: geo, mode: 'city', viewFit: { ...viewFit, initialZoom: 1.65 } } });
+    const baseline = mount(PanoramaMap, { props: { geoJson: geo, mode: 'city', viewFit: { ...viewFit, initialZoom: 6.6 } } });
     const enlarged = mount(PanoramaMap, { props: { geoJson: geo, mode: 'city', viewFit } });
     await nextTick();
     const initialPath = enlarged.get('path[data-region-code="610103"]').attributes('d');
@@ -39,12 +39,12 @@ describe('市级地图初始缩放', () => {
     const after = pathBounds(initialPath);
     expect(viewFit.focusCenterSource).toBe('BEILIN_DISTRICT');
     expect(viewFit.focusCenter).toEqual({ lng: 108.5, lat: 34.5 });
-    expect(enlarged.attributes('data-zoom')).toBe('6.60');
-    expect(after.width / before.width).toBeCloseTo(4, 2);
-    expect(after.height / before.height).toBeCloseTo(4, 2);
+    expect(enlarged.attributes('data-zoom')).toBe('3.30');
+    expect(after.width / before.width).toBeCloseTo(0.5, 2);
+    expect(after.height / before.height).toBeCloseTo(0.5, 2);
     await enlarged.get('button[aria-label="缩小地图"]').trigger('click');
     await enlarged.get('button[aria-label="重置地图视图"]').trigger('click');
-    expect(enlarged.attributes('data-zoom')).toBe('6.60');
+    expect(enlarged.attributes('data-zoom')).toBe('3.30');
     expect(enlarged.get('path[data-region-code="610103"]').attributes('d')).toBe(initialPath);
     baseline.unmount();
     enlarged.unmount();

@@ -236,8 +236,8 @@ export function buildCityDistrictMapState(geoJson, institutions, { demo = false,
           lat: center.lat + lat / locatedPoints.length
         }), { lng: 0, lat: 0 })
         : null;
-      // 分行下钻在原默认取景（1.65）基础上放大四倍，进入和重置共用此倍率。
-      viewFit.initialZoom = businessLine === 'COMMON' ? 1.65 * 4 : 1.65;
+      // 分行下钻以 3.3 作为当前默认倍率，进入和重置共用此倍率。
+      viewFit.initialZoom = businessLine === 'COMMON' ? 3.3 : 1.65;
       viewFit.focusCenterSource = beilinCenter ? 'BEILIN_DISTRICT' : pointCenter ? 'INSTITUTION_POINTS' : 'REGION_BOUNDS';
       viewFit.focusCenter = (beilinCenter || pointCenter || centers.reduce((center, item) => ({
         lng: center.lng + item.lng / centers.length,
