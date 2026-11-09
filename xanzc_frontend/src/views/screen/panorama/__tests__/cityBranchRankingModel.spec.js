@@ -146,4 +146,22 @@ describe('cityBranchRankingModel', () => {
     });
     expect(blank.rows).toHaveLength(0);
   });
+
+  it('消费新增中文 NPL 字段别名，保留零值、拒绝负值并过滤未授权机构', () => {
+    const sourcePresentation = { display: { components: [{ dataRefs: [{ blockId: 9033 }] }] } };
+    const blockResults = { 9033: { rows: [
+      { org_code: 'A', '测试_零售贷款不良率': 0, '测试_对公贷款不良率': 0 },
+      { org_code: 'B', '测试_零售贷款不良率': -0.1, '测试_对公贷款不良率': 0.2 },
+      { org_code: 'OUT', '测试_零售贷款不良率': 99, '测试_对公贷款不良率': 99 }
+    ], unitByField: { '测试_零售贷款不良率': 'PERCENT', '测试_对公贷款不良率': 'PERCENT' } } };
+    const input = { cityCode: '610100', sourcePresentation, blockResults,
+      institutions: [{ orgCode: 'A', cityCode: '610100' }, { orgCode: 'B', cityCode: '610100' }], activeTabKey: 'retailNplRate' };
+    const retail = buildCityBranchRankingModel(input);
+    expect(retail.rows).toMatchObject([{ orgCode: 'A', value: 0 }]);
+    expect(retail.missingRows.map(row => row.orgCode)).toContain('B');
+    expect(retail.rows.map(row => row.orgCode)).not.toContain('OUT');
+    const corp = buildCityBranchRankingModel({ ...input, activeTabKey: 'corpNplRate' });
+    expect(corp.rows).toMatchObject([{ orgCode: 'A', value: 0 }, { orgCode: 'B', value: 0.2 }]);
+    expect(corp.rows.map(row => row.orgCode)).not.toContain('OUT');
+  });
 });
