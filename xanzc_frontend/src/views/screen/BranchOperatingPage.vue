@@ -1,7 +1,7 @@
 <template>
   <section class="branch-operating-page">
     <div class="branch-operating-source-bar">
-      <strong>支行经营总览 · {{ isParentSource ? 'TEST 测试数据' : (isTestSource ? 'TEST 测试数据' : (view.screenCode ? '已绑定数据源' : '核对数据来源')) }}</strong>
+      <strong>支行经营总览 · {{ isParentSource ? '数据库统计' : (isTestSource ? 'TEST 测试数据' : (view.screenCode ? '已绑定数据源' : '核对数据来源')) }}</strong>
       <span v-if="isParentSource" data-testid="branch-operating-parent-banner">测试数据 · 非实际经营数据</span>
       <span v-else-if="isTestSource" data-testid="branch-operating-test-banner">测试数据 · 非实际经营数据</span>
       <span v-else>当前接入对公指标与触达汇总</span>
@@ -12,7 +12,7 @@
       </nav>
       <details><summary>来源与口径</summary><div>
         <p v-for="(source, index) in dashboard.sources" :key="index"><strong>{{ source.label }}</strong> {{ source.detail }}</p>
-        <p v-if="isParentSource">当前为分行经营总览 · {{ parentSourceStateLabel }}（{{ sourceScreenCode }}），展示内容仅用于接口联调，不代表实际经营数据。</p>
+        <p v-if="isParentSource">当前为分行经营总览 · {{ parentSourceStateLabel }}，按正式统计口径计算，包含生成基础明细，不代表真实经营业绩。</p>
         <p v-else-if="isTestSource">当前为 TEST 批次，展示内容仅用于接口联调，不代表实际经营数据。</p>
         <template v-else>
           <p>经营关注来自考核目标差距，不代表审批待办。资产项目与团队数据未接入。</p>
@@ -66,7 +66,14 @@ let generation = 0;
 let lastInitializedRouteSignature = '';
 let lastScheduledRouteSignature = '';
 let disposed = false;
-const sourceScreenCode = computed(() => String(route.query?.sourceScreenCode || '').trim());
+// 旧 source=test 链接只作为兼容入口，统一复用已授权的省级父屏查询链，
+// 不再读取 9031 FREE_REPORT 测试批次。sourceScreenCode 仍需通过父屏白名单校验。
+const sourceScreenCode = computed(() => {
+  const explicit = String(route.query?.sourceScreenCode || '').trim();
+  if (explicit) return explicit;
+  const requested = String(route.query?.source || '').trim().toLowerCase();
+  return requested === '' || requested === 'test' ? 'SCR_PROVINCE' : '';
+});
 const sourcePreview = computed(() => String(route.query?.sourcePreview || '').trim().toLowerCase());
 const isParentSource = computed(() => Boolean(sourceScreenCode.value));
 const parentSourceStateLabel = computed(() => {
@@ -75,7 +82,15 @@ const parentSourceStateLabel = computed(() => {
   if (state === 'draft') return '草稿预览';
   return '状态确认中';
 });
-const sourceMode = computed(() => isParentSource.value ? 'parent' : (String(route.query?.source || '').trim().toLowerCase() === 'live' ? 'live' : 'test'));
+const sourceMode = computed(() => {
+  if (isParentSource.value) return 'parent';
+  const requested = String(route.query?.source || '').trim().toLowerCase();
+  if (requested === 'live') return 'live';
+  if (requested === '') return 'invalid';
+  return requested === 'test' ? 'parent' : 'invalid';
+});
+const legacyTestEntry = computed(() => ['', 'test'].includes(String(route.query?.source || '').trim().toLowerCase())
+  && !String(route.query?.sourceScreenCode || '').trim());
 const isTestSource = computed(() => sourceMode.value === 'test');
 let activeSourceMode = '';
 const state = usePanoramaData(view, context, { singleOrg: true, autoLoad: false, watch: false });
@@ -349,15 +364,31 @@ async function loadParentSelected() {
 async function initializeParent(token) {
   const contextValue = parentSourceContext();
   const routeCode = String(route.query?.orgCode || '').trim();
-  const cityCode = String(route.query?.cityCode || '').trim();
+  let cityCode = String(route.query?.cityCode || '').trim();
   if (!routeCode) throw parentNavigationBlock('ORG_REQUIRED', '父屏导航缺少机构号，未使用默认机构。');
-  const response = contextValue.preview
-    ? await getScreenView(contextValue.screenCode, contextValue.preview)
-    : await getScreenView(contextValue.screenCode);
+  let response;
+  try {
+    response = contextValue.preview
+      ? await getScreenView(contextValue.screenCode, contextValue.preview)
+      : await getScreenView(contextValue.screenCode);
+  } catch (error) {
+    throw parentNavigationBlock('PARENT_SOURCE_PERMISSION', '父屏数据源权限确认失败，未进入机构主路径。');
+  }
   if (token !== generation) return;
   view.value = parseParentBranchOperatingSource(response, {
     sourceScreenCode: contextValue.screenCode, sourcePreview: contextValue.preview
   });
+  if (!cityCode && legacyTestEntry.value) {
+    const matches = (view.value.panoramaInstitutions || view.value.panorama_institutions || [])
+      .filter(item => String(item?.orgCode || item?.org_code || '').trim() === routeCode)
+      .map(item => String(item?.cityCode || item?.city_code || '').trim())
+      .filter(Boolean);
+    const uniqueCities = [...new Set(matches)];
+    if (uniqueCities.length !== 1) {
+      throw parentNavigationBlock('CITY_NOT_AUTHORIZED', '旧链接缺少唯一的已授权城市上下文。');
+    }
+    cityCode = uniqueCities[0];
+  }
   const resolved = parentResolvedInstitution(view.value, routeCode, cityCode);
   const rules = navigationRulesOf(view.value);
   institutions.value = (view.value.panoramaInstitutions || view.value.panorama_institutions || [])
@@ -382,6 +413,7 @@ async function initialize() {
   pageError.value = '';
   clearPageState();
   try {
+    if (mode === 'invalid') throw navigationBlock('SOURCE_INVALID', '数据来源参数无效，未进入旧测试或存量数据路径。');
     if (mode === 'parent') {
       await initializeParent(token);
       if (token === generation) loading.value = false;
@@ -426,7 +458,8 @@ async function initialize() {
     clearPageState();
     pageError.value = error.message || '数据来源加载失败';
     navigationBlocked.value = Boolean(error?.code?.startsWith('ORG_')
-      || error?.code?.startsWith('PARENT_SOURCE_') || error?.code === 'CITY_NOT_AUTHORIZED');
+      || error?.code?.startsWith('PARENT_SOURCE_') || error?.code === 'CITY_NOT_AUTHORIZED'
+      || error?.code === 'SOURCE_INVALID');
     loading.value = false;
   }
 }

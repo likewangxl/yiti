@@ -91,9 +91,34 @@ public class KpiCalcService {
         List<PerfKpiItem> items = Optional.ofNullable(kpiItemService.listBySchemeId(scheme.getId()))
                 .orElse(List.of());
 
+        // 个人数据源只计算员工维度项；机构/客户项保留在方案中但不参与个人分母或取数。
+        List<PerfKpiItem> employeeItems = new ArrayList<>();
+        Map<String, PerfMetricDef> employeeDefinitions = new LinkedHashMap<>();
+        for (PerfKpiItem item : items) {
+            String declaredDim = item.getBaseDim();
+            if (declaredDim != null && !declaredDim.isBlank()
+                    && !"EMP".equalsIgnoreCase(declaredDim)) {
+                if (!"ORG".equalsIgnoreCase(declaredDim) && !"CUST".equalsIgnoreCase(declaredDim)) {
+                    throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID,
+                            "未知 KPI 项维度: " + declaredDim);
+                }
+                continue;
+            }
+            PerfMetricDef declaredDef = metricDefService.getByCodeOrNull(item.getMetricCode());
+            if (declaredDef == null) {
+                throw new PerfException(PerfErrorCode.METRIC_NOT_FOUND, item.getMetricCode());
+            }
+            if (!"EMP".equalsIgnoreCase(declaredDef.getBaseDim())) {
+                throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID,
+                        "员工 KPI 项引用了非 EMP 指标: " + item.getMetricCode());
+            }
+            employeeItems.add(item);
+            employeeDefinitions.put(item.getMetricCode(), declaredDef);
+        }
+
         // 权重总和校验（= 0 视为无效配置）
         BigDecimal totalWeight = BigDecimal.ZERO;
-        for (PerfKpiItem it : items) {
+        for (PerfKpiItem it : employeeItems) {
             BigDecimal w = it.getWeight() == null ? BigDecimal.ZERO : it.getWeight();
             totalWeight = totalWeight.add(w);
         }
@@ -105,12 +130,10 @@ public class KpiCalcService {
         List<Map<String, Object>> details = new ArrayList<>();
         BigDecimal weightedSum = BigDecimal.ZERO;
 
-        for (PerfKpiItem item : items) {
+        for (PerfKpiItem item : employeeItems) {
             String metricCode = item.getMetricCode();
-            PerfMetricDef def = metricDefService.getByCodeOrNull(metricCode);
-            if (def == null) {
-                throw new PerfException(PerfErrorCode.METRIC_NOT_FOUND, metricCode);
-            }
+            PerfMetricDef def = employeeDefinitions.get(metricCode);
+            if (def == null) throw new PerfException(PerfErrorCode.METRIC_NOT_FOUND, metricCode);
             Integer slot = def.getValSlot();
             if (slot == null || slot < 1 || slot > 400) {
                 throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID,

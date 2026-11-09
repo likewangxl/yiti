@@ -1,10 +1,10 @@
 const TAB_DEFINITIONS = [
-  ['retailDepositRate', '零售存款', 'rate', 'DESC', ['retailDepositRate', 'retailDepositCompletionRate', 'retailDepositCompleteRate', '测试_零售存款目标完成率']],
-  ['retailLoanRate', '零售贷款', 'rate', 'DESC', ['retailLoanRate', 'retailLoanCompletionRate', 'retailLoanCompleteRate', '测试_零售贷款目标完成率']],
-  ['retailNplRate', '零售贷款不良率', 'npl', 'ASC', ['retailNplRate', 'retailLoanNplRate', 'retail.nplRate', '测试_零售贷款不良率']],
-  ['corpDepositRate', '对公存款', 'rate', 'DESC', ['corpDepositRate', 'corpDepositCompletionRate', 'corpDepositCompleteRate', '测试_对公存款目标完成率']],
-  ['corpLoanRate', '对公贷款', 'rate', 'DESC', ['corpLoanRate', 'corpLoanCompletionRate', 'corpLoanCompleteRate', '测试_对公贷款目标完成率']],
-  ['corpNplRate', '对公贷款不良率', 'npl', 'ASC', ['corpNplRate', 'corporateNplRate', 'corp.nplRate', 'corpLoanNplRate', '测试_对公贷款不良率']]
+  ['retailDepositRate', '零售存款', 'rate', 'DESC', ['retailDepositRate', 'retailDepositCompletionRate', 'retailDepositCompleteRate', '零售存款目标完成率', '测试_零售存款目标完成率']],
+  ['retailLoanRate', '零售贷款', 'rate', 'DESC', ['retailLoanRate', 'retailLoanCompletionRate', 'retailLoanCompleteRate', '零售贷款目标完成率', '测试_零售贷款目标完成率']],
+  ['retailNplRate', '零售贷款不良率', 'npl', 'ASC', ['retailNplRate', 'retailLoanNplRate', 'retail.nplRate', '零售贷款不良率', '测试_零售贷款不良率']],
+  ['corpDepositRate', '对公存款', 'rate', 'DESC', ['corpDepositRate', 'corpDepositCompletionRate', 'corpDepositCompleteRate', '对公存款目标完成率', '测试_对公存款目标完成率']],
+  ['corpLoanRate', '对公贷款', 'rate', 'DESC', ['corpLoanRate', 'corpLoanCompletionRate', 'corpLoanCompleteRate', '对公贷款目标完成率', '测试_对公贷款目标完成率']],
+  ['corpNplRate', '对公贷款不良率', 'npl', 'ASC', ['corpNplRate', 'corporateNplRate', 'corp.nplRate', 'corpLoanNplRate', '对公贷款不良率', '测试_对公贷款不良率']]
 ];
 
 export const CITY_BRANCH_RANKING_TABS = Object.freeze(TAB_DEFINITIONS.map(([key, label, kind, direction, fields]) => Object.freeze({

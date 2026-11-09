@@ -34,7 +34,7 @@ class M98StatQueryTest {
         OrgApi orgApi = mock(OrgApi.class);
         when(orgApi.listUniqueUserOrgs(List.of("330", "90"))).thenReturn(List.of(
                 mapping("U330", "330"), mapping("U90", "90")));
-        JdbcFixture jdbc = jdbc(Date.valueOf("2026-07-24"), List.of(
+        JdbcFixture jdbc = jdbc(Date.valueOf("2026-07-24"), List.<String[]>of(
                 row("U330", "2026-07-24", "盈利指标", "税前利润", "营业收入", "板块分类", "1", "公司", "100.5", null),
                 row("U330", "2026-07-24", "盈利指标", "税前利润", "营业收入", "板块分类", "1", "公司", "200.5", null),
                 row("U90", "2026-07-24", "盈利指标", "税前利润", "营业收入", "板块分类", "1", "公司", "300", null)));
@@ -116,6 +116,90 @@ class M98StatQueryTest {
     }
 
     @Test
+    void nplZeroDenominatorInstitutionDoesNotEraseOtherInstitutionContribution() throws Exception {
+        OrgApi orgApi = mock(OrgApi.class);
+        when(orgApi.listUniqueUserOrgs(List.of("330", "90"))).thenReturn(List.of(
+                mapping("U330", "330"), mapping("U90", "90")));
+        JdbcFixture jdbc = jdbc(Date.valueOf("2026-07-24"), List.of(
+                nplRow("U330", "正常", "0"), nplRow("U330", "关注", "0"),
+                nplRow("U330", "次级", "0"), nplRow("U330", "可疑", "0"), nplRow("U330", "损失", "0"),
+                nplRow("U90", "正常", "95"), nplRow("U90", "关注", "0"),
+                nplRow("U90", "次级", "5"), nplRow("U90", "可疑", "0"), nplRow("U90", "损失", "0")));
+
+        ScreenDataRespDTO response = new M98StatQuery(jdbc.dataSource(), orgApi)
+                .query("CORP_NPL_RATE", List.of("330", "90"), List.of("330", "90"),
+                        LocalDate.of(2026, 7, 25), 1000);
+
+        assertThat(response.getRows()).containsExactly(List.of("2026-07-24", new BigDecimal("5.00")));
+        assertThat(response.getQuality().getStatus()).isEqualTo("COMPLETE");
+    }
+
+    @Test
+    void generatedAmountMetadataIsExposedOnlyWhenAllRowsCarryExplicitMarker() throws Exception {
+        OrgApi orgApi = mock(OrgApi.class);
+        when(orgApi.listUniqueUserOrgs(List.of("330"))).thenReturn(List.of(mapping("U330", "330")));
+        JdbcFixture jdbc = jdbc(Date.valueOf("2026-07-24"), List.<String[]>of(
+                generatedRow("U330", "100", "GENERATED_SCREEN_20261109",
+                        "{\"origin\":\"GENERATED\",\"amountUnit\":\"YUAN\"}")));
+
+        ScreenDataRespDTO response = new M98StatQuery(jdbc.dataSource(), orgApi)
+                .query("CORP_REVENUE", List.of("330"), List.of("330"),
+                        LocalDate.of(2026, 7, 25), 1000);
+
+        assertThat(response.getColumnsMeta().get(1).getUnit()).isEqualTo("YUAN");
+        assertThat(response.getQuality().getDataClassification()).isEqualTo("TEST");
+        assertThat(response.getQuality().getMessage()).contains("含生成基础明细");
+    }
+
+    @Test
+    void negativePrincipalCannotBeHiddenByAnotherPositiveInstitution() throws Exception {
+        OrgApi orgApi = mock(OrgApi.class);
+        when(orgApi.listUniqueUserOrgs(List.of("330", "90")))
+                .thenReturn(List.of(mapping("U330", "330"), mapping("U90", "90")));
+        JdbcFixture jdbc = jdbc(Date.valueOf("2026-07-24"), List.of(
+                nplRow("U330", "正常", "-10"), nplRow("U90", "正常", "95"), nplRow("U90", "次级", "5")));
+        ScreenDataRespDTO response = new M98StatQuery(jdbc.dataSource(), orgApi)
+                .query("CORP_NPL_RATE", List.of("330", "90"), List.of("330", "90"),
+                        LocalDate.of(2026, 7, 25), 1000);
+        assertThat(response.getRows().get(0).get(1)).isNull();
+        assertThat(response.getQuality().getStatus()).isEqualTo("PARTIAL");
+    }
+
+    @Test
+    void mixedOrMalformedSourceMetadataKeepsTestClassificationButDoesNotCertifyYuan() throws Exception {
+        OrgApi orgApi = mock(OrgApi.class);
+        when(orgApi.listUniqueUserOrgs(List.of("330"))).thenReturn(List.of(mapping("U330", "330")));
+        JdbcFixture jdbc = jdbc(Date.valueOf("2026-07-24"), List.<String[]>of(
+                generatedRow("U330", "100", "GENERATED_SCREEN_20261109",
+                        " { \"origin\": \"GENERATED\", \"amountUnit\": \"YUAN\" } "),
+                generatedRow("U330", "20", "LEGACY_SOURCE", "{\"origin\":\"GENERATED\",\"amountUnit\":\"YUAN\"}")));
+
+        ScreenDataRespDTO response = new M98StatQuery(jdbc.dataSource(), orgApi)
+                .query("CORP_REVENUE", List.of("330"), List.of("330"),
+                        LocalDate.of(2026, 7, 25), 1000);
+
+        assertThat(response.getColumnsMeta().get(1).getUnit()).isNull();
+        assertThat(response.getQuality().getDataClassification()).isEqualTo("TEST");
+        assertThat(response.getQuality().getMessage()).contains("含生成基础明细");
+    }
+
+    @Test
+    void malformedGeneratedRemarkDoesNotCertifyAmountUnit() throws Exception {
+        OrgApi orgApi = mock(OrgApi.class);
+        when(orgApi.listUniqueUserOrgs(List.of("330"))).thenReturn(List.of(mapping("U330", "330")));
+        JdbcFixture jdbc = jdbc(Date.valueOf("2026-07-24"), List.<String[]>of(
+                generatedRow("U330", "100", "GENERATED_SCREEN_20261109", "not-json")));
+
+        ScreenDataRespDTO response = new M98StatQuery(jdbc.dataSource(), orgApi)
+                .query("CORP_REVENUE", List.of("330"), List.of("330"),
+                        LocalDate.of(2026, 7, 25), 1000);
+
+        assertThat(response.getColumnsMeta().get(1).getUnit()).isNull();
+        assertThat(response.getQuality().getDataClassification()).isEqualTo("TEST");
+        assertThat(response.getQuality().getMessage()).contains("含生成基础明细");
+    }
+
+    @Test
     void emptyMappingReturnsNoSourceWithoutOpeningReadonlyDatabase() throws Exception {
         OrgApi orgApi = mock(OrgApi.class);
         when(orgApi.listUniqueUserOrgs(List.of("330"))).thenReturn(List.of());
@@ -173,12 +257,21 @@ class M98StatQueryTest {
     private static String[] row(String empId, String date, String type, String level1, String level2,
                                 String subType, String subCode, String subName, String ftpRevenue, String currBal) {
         return new String[]{empId, date, type, level1, level2, null, subType, subCode, subName,
-                currBal, ftpRevenue};
+                currBal, ftpRevenue, null, null};
     }
 
     private static String[] nplRow(String empId, String category, String amount) {
         return new String[]{empId, "2026-07-24", "报表指标", "对公业务（不含汇兑，含逾期）",
-                "对公资产业务", "对公板块贷款", "五级分类", "", category, amount, null};
+                "对公资产业务", "对公板块贷款", "五级分类", "", category, amount, null, null, null};
+    }
+
+    private static String[] generatedRow(String empId, String amount, String source, String remark) {
+        String[] row = row(empId, "2026-07-24", "盈利指标", "税前利润", "营业收入",
+                "板块分类", "1", "公司", amount, null);
+        String[] generated = java.util.Arrays.copyOf(row, 13, String[].class);
+        generated[11] = source;
+        generated[12] = remark;
+        return generated;
     }
 
     private static JdbcFixture jdbc(Date commonDate, List<String[]> rows) throws Exception {
@@ -200,7 +293,7 @@ class M98StatQueryTest {
         when(dateResult.next()).thenReturn(true, false);
         when(dateResult.getObject(1)).thenReturn(commonDate);
         when(rowsResult.getMetaData()).thenReturn(metadata);
-        when(metadata.getColumnCount()).thenReturn(11);
+        when(metadata.getColumnCount()).thenReturn(13);
         Iterator<String[]> iterator = rows.iterator();
         String[][] current = new String[1][];
         when(rowsResult.next()).thenAnswer(invocation -> {

@@ -164,4 +164,27 @@ describe('cityBranchRankingModel', () => {
     expect(corp.rows).toMatchObject([{ orgCode: 'A', value: 0 }, { orgCode: 'B', value: 0.2 }]);
     expect(corp.rows.map(row => row.orgCode)).not.toContain('OUT');
   });
+
+  it('消费正式中文字段别名并保留百分比单位安全校验', () => {
+    const sourcePresentation = { display: { components: [{ dataRefs: [{ blockId: 9033 }] }] } };
+    const blockResults = { 9033: { rows: [
+      { org_code: 'A', '零售存款目标完成率': 0, '零售贷款目标完成率': 80, '零售贷款不良率': 0.2,
+        '对公存款目标完成率': 95, '对公贷款目标完成率': 70, '对公贷款不良率': 0.1 },
+      { org_code: 'B', '零售存款目标完成率': 90, '零售贷款目标完成率': 60, '零售贷款不良率': 0.3,
+        '对公存款目标完成率': 85, '对公贷款目标完成率': 65, '对公贷款不良率': 0.2 }
+    ], unitByField: {
+      '零售存款目标完成率': 'PERCENT', '零售贷款目标完成率': 'PERCENT', '零售贷款不良率': 'PERCENT',
+      '对公存款目标完成率': 'PERCENT', '对公贷款目标完成率': 'PERCENT', '对公贷款不良率': 'PERCENT'
+    } } };
+    const input = { cityCode: '610100', sourcePresentation, blockResults,
+      institutions: [{ orgCode: 'A', cityCode: '610100' }, { orgCode: 'B', cityCode: '610100' }] };
+    for (const tab of tabs) {
+      const result = buildCityBranchRankingModel({ ...input, activeTabKey: tab.key });
+      expect(result.rows).toHaveLength(2);
+    }
+    const wrongUnit = buildCityBranchRankingModel({ ...input, blockResults: { 9033: {
+      rows: [{ org_code: 'A', '零售存款目标完成率': 100 }], unitByField: { '零售存款目标完成率': 'YUAN' }
+    } }, activeTabKey: 'retailDepositRate' });
+    expect(wrongUnit.rows).toHaveLength(0);
+  });
 });

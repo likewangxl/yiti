@@ -47,7 +47,7 @@ import java.util.UUID;
  *       <ul>
  *         <li>SQL → {@link SqlExecutor}（含 {@link com.bank.branch.platform.performance.service.engine.SqlValidator} 黑名单）</li>
  *         <li>EXPR / GROOVY → {@link SubjectFetcher} 取主体集合，逐主体调 {@link GroovyExecutor}（沙盒 + 超时）</li>
- *         <li>PROC / SUMMARY → 暂不支持，抛 {@link PerfErrorCode#CALC_JOB_FAILED}</li>
+ *         <li>PROC → 暂不支持；SUMMARY → 通过机构汇总器聚合员工指标并写入机构宽表</li>
  *       </ul>
  *   </li>
  *   <li>按 {@code base_dim} 将 {@code (baseKey -> value)} 写入三张宽表之一
@@ -94,6 +94,10 @@ public class MetricCalcService {
     private final ApplicationEventPublisher eventPublisher;
     private final CurrentUserApi currentUserApi;
 
+    /** 机构 SUMMARY 汇总器由 Spring 注入；保留旧构造器以兼容已有测试与调用方。 */
+    @Autowired(required = false)
+    private OrgMetricSummaryCalculator orgMetricSummaryCalculator;
+
     /**
      * 构造器注入（V1.7 新增 SubjectFetcher + ApplicationEventPublisher 参数；
      * 新增 CurrentUserApi 用于 run_task.started_by 兜底）.
@@ -125,6 +129,11 @@ public class MetricCalcService {
         this.currentUserApi = currentUserApi;
     }
 
+    /** 仅供同包测试注入 SUMMARY 汇总器，不改变公开构造器契约。 */
+    void setOrgMetricSummaryCalculator(OrgMetricSummaryCalculator calculator) {
+        this.orgMetricSummaryCalculator = calculator;
+    }
+
     /**
      * 无副作用预检指标执行请求。
      *
@@ -147,7 +156,7 @@ public class MetricCalcService {
      * @param dataDate   数据日期（必填）
      * @param version    数据版本（必填）
      * @return run_task 主键 ID
-     * @throws PerfException 指标不存在 / 指标已软删除 / SQL 语法非法 / 沙盒拦截 / 超时 / PROC/SUMMARY 未支持 / slot 未分配
+     * @throws PerfException 指标不存在 / 指标已软删除 / SQL 语法非法 / 沙盒拦截 / 超时 / PROC 未支持 / slot 未分配
      */
     public String calcMetric(String metricCode, LocalDate dataDate, String version) {
         // 保持旧调用方兼容：默认 triggerType = MANUAL
@@ -162,7 +171,7 @@ public class MetricCalcService {
      * @param version     数据版本（必填）
      * @param triggerType 触发类型（SCHEDULED/MANUAL/RECALC，spec § 4.5）
      * @return run_task 主键 ID
-     * @throws PerfException 指标不存在 / 指标已软删除 / SQL 语法非法 / 沙盒拦截 / 超时 / PROC/SUMMARY 未支持 / slot 未分配
+     * @throws PerfException 指标不存在 / 指标已软删除 / SQL 语法非法 / 沙盒拦截 / 超时 / PROC 未支持 / slot 未分配
      */
     public String calcMetric(String metricCode, LocalDate dataDate, String version, String triggerType) {
         // 业绩分配日期 allocDate 不传 → 委托 5 参重载传 null，由 SQL 绑定阶段兜底为 dataDate
@@ -181,7 +190,7 @@ public class MetricCalcService {
      * @param triggerType 触发类型（SCHEDULED/MANUAL/RECALC，spec § 4.5）
      * @param allocDate   业绩分配日期（可为 null，绑定阶段兜底为 dataDate）
      * @return run_task 主键 ID
-     * @throws PerfException 指标不存在 / 指标已软删除 / SQL 语法非法 / 沙盒拦截 / 超时 / PROC/SUMMARY 未支持 / slot 未分配
+     * @throws PerfException 指标不存在 / 指标已软删除 / SQL 语法非法 / 沙盒拦截 / 超时 / PROC 未支持 / slot 未分配
      */
     public String calcMetric(String metricCode, LocalDate dataDate, String version,
                              String triggerType, LocalDate allocDate) {
@@ -259,9 +268,17 @@ public class MetricCalcService {
                 stats = executeSqlAndPersist(def, dataDate, version, jobKey, triggerType, allocDate);
             } else if ("EXPR".equalsIgnoreCase(logicType) || "GROOVY".equalsIgnoreCase(logicType)) {
                 stats = executeGroovyAndPersist(def, dataDate, version, jobKey, triggerType);
-            } else if ("PROC".equalsIgnoreCase(logicType) || "SUMMARY".equalsIgnoreCase(logicType)) {
+            } else if ("SUMMARY".equalsIgnoreCase(logicType)) {
+                if (orgMetricSummaryCalculator == null) {
+                    throw new PerfException(PerfErrorCode.CALC_JOB_FAILED, "机构 SUMMARY 汇总器未装配");
+                }
+                Map<String, BigDecimal> values = orgMetricSummaryCalculator.calculate(def, dataDate, version);
+                persistValues(def, values, dataDate, version);
+                int success = (int) values.values().stream().filter(java.util.Objects::nonNull).count();
+                stats = new SubjectStats(values.size(), success, values.size() - success, List.of(), jobKey, triggerType);
+            } else if ("PROC".equalsIgnoreCase(logicType)) {
                 throw new PerfException(PerfErrorCode.CALC_JOB_FAILED,
-                        "PROC/SUMMARY 暂不支持自动调度: " + logicType);
+                        "PROC 暂不支持自动调度: " + logicType);
             } else {
                 throw new PerfException(PerfErrorCode.METRIC_CALC_LOGIC_INVALID,
                         "未知 calcLogicType=" + logicType);

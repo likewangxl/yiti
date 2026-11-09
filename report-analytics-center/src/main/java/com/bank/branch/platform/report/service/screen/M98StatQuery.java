@@ -5,6 +5,8 @@ import com.bank.branch.platform.auth.api.dto.UniqueUserOrgDTO;
 import com.bank.branch.platform.report.dto.resp.ScreenDataRespDTO;
 import com.bank.branch.platform.report.enums.RptErrorCode;
 import com.bank.branch.platform.report.exception.RptException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 
 import javax.sql.DataSource;
@@ -44,6 +46,7 @@ final class M98StatQuery {
 
     private final DataSource dataSource;
     private final OrgApi orgApi;
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     M98StatQuery(DataSource dataSource, OrgApi orgApi) {
         this.dataSource = dataSource;
@@ -106,7 +109,7 @@ final class M98StatQuery {
         if (mapping.employeeIds().isEmpty()) {
             return new ScreenQueryPlan("SELECT EMP_ID, STATIS_DT, IND_TYPE, IND_NAME_1_LEV, "
                     + "IND_NAME_2_LEV, IND_NAME_3_LEV, SUB_PROJ_TYPE, SUB_PROJ_CODE, "
-                    + "SUB_PROJ_NAME, CURR_BAL, FTP_REVENUE FROM " + TABLE + " WHERE 1 = 0", List.of());
+                    + "SUB_PROJ_NAME, CURR_BAL, FTP_REVENUE, DATA_SRC, REMARK FROM " + TABLE + " WHERE 1 = 0", List.of());
         }
         if (mapping.employeeIds().size() > MAX_EMPLOYEE_IDS) {
             throw new RptException(RptErrorCode.SCREEN_DATA_QUERY_FAILED,
@@ -145,7 +148,7 @@ final class M98StatQuery {
         String placeholders = placeholders(employeeIds.size());
         String currency = M98StatPolicy.currencyType(profile);
         String sql = "SELECT EMP_ID, STATIS_DT, IND_TYPE, IND_NAME_1_LEV, IND_NAME_2_LEV, "
-                + "IND_NAME_3_LEV, SUB_PROJ_TYPE, SUB_PROJ_CODE, SUB_PROJ_NAME, CURR_BAL, FTP_REVENUE"
+                + "IND_NAME_3_LEV, SUB_PROJ_TYPE, SUB_PROJ_CODE, SUB_PROJ_NAME, CURR_BAL, FTP_REVENUE, DATA_SRC, REMARK"
                 + " FROM " + TABLE + " WHERE CURRENCY_TYPE = '" + currency + "'"
                 + " AND STATIS_DT = ? AND EMP_ID IN (" + placeholders + ")"
                 + " AND " + profilePredicate(profile)
@@ -162,7 +165,7 @@ final class M98StatQuery {
                             result.getString(1), result.getString(2), result.getString(3),
                             result.getString(4), result.getString(5), result.getString(6),
                             result.getString(7), result.getString(8), result.getString(9),
-                            result.getString(10), result.getString(11)));
+                            result.getString(10), result.getString(11), result.getString(12), result.getString(13)));
                 }
                 if (rows.size() > MAX_DETAIL_ROWS) {
                     throw new RptException(RptErrorCode.SCREEN_DATA_QUERY_FAILED,
@@ -194,7 +197,7 @@ final class M98StatQuery {
         }
         String output = placeholders(outputEmployeeIds.size());
         String sql = "SELECT EMP_ID, STATIS_DT, IND_TYPE, IND_NAME_1_LEV, IND_NAME_2_LEV, "
-                + "IND_NAME_3_LEV, SUB_PROJ_TYPE, SUB_PROJ_CODE, SUB_PROJ_NAME, CURR_BAL, FTP_REVENUE"
+                + "IND_NAME_3_LEV, SUB_PROJ_TYPE, SUB_PROJ_CODE, SUB_PROJ_NAME, CURR_BAL, FTP_REVENUE, DATA_SRC, REMARK"
                 + " FROM " + TABLE + " WHERE CURRENCY_TYPE = '" + currency + "' AND " + datePredicate
                 + " AND EMP_ID IN (" + output + ") AND " + profilePredicate(profile)
                 + " LIMIT " + (MAX_DETAIL_ROWS + 1);
@@ -220,10 +223,10 @@ final class M98StatQuery {
             } else {
                 state.acceptAmount(valueFor(profile, row));
             }
+            state.acceptSource(row.dataSrc(), row.remark());
         }
 
-        boolean invalid = states.values().stream().anyMatch(state -> state.invalid
-                || (M98StatPolicy.isNplProfile(profile) && state.nplRatio() == null));
+        boolean invalid = states.values().stream().anyMatch(state -> state.invalid);
         List<String> receivedCodes = output.stream()
                 .filter(code -> states.containsKey(code) && states.get(code).hasRows).toList();
         Object value = M98StatPolicy.isNplProfile(profile)
@@ -244,9 +247,17 @@ final class M98StatQuery {
         } else {
             status = "COMPLETE";
         }
+        boolean generated = !states.isEmpty() && states.values().stream().anyMatch(state -> state.generatedSource);
+        boolean generatedAmount = !states.isEmpty() && states.values().stream()
+                .allMatch(state -> state.generated && !state.sourceMetadataInvalid);
+        String sourceMessage = generated ? "含生成基础明细，非真实经营记录" : null;
+        String qualityMessage = status.equals("NO_SOURCE") ? "共同统计日期没有匹配的 M98 数据"
+                : status.equals("PARTIAL") ? "授权机构与可解析 M98 数据存在缺口或质量问题" : null;
+        if (sourceMessage != null) {
+            qualityMessage = qualityMessage == null ? sourceMessage : qualityMessage + "；" + sourceMessage;
+        }
         return response(profile, resultRows, authorized, receivedCodes, dataDate, status,
-                status.equals("NO_SOURCE") ? "共同统计日期没有匹配的 M98 数据"
-                        : status.equals("PARTIAL") ? "授权机构与可解析 M98 数据存在缺口或质量问题" : null);
+                qualityMessage, generatedAmount, generated);
     }
 
     private BigDecimal aggregateAmount(Map<String, AggregateState> states, List<String> receivedCodes,
@@ -275,9 +286,6 @@ final class M98StatQuery {
         BigDecimal denominator = BigDecimal.ZERO;
         for (String code : receivedCodes) {
             AggregateState state = states.get(code);
-            if (state.nplRatio() == null) {
-                return null;
-            }
             numerator = numerator.add(state.nplNumerator);
             denominator = denominator.add(state.nplDenominator);
         }
@@ -354,18 +362,27 @@ final class M98StatQuery {
     private ScreenDataRespDTO response(String profile, List<List<Object>> rows, List<String> authorized,
                                        Collection<String> receivedCodes, LocalDate dataDate,
                                        String status, String message) {
+        return response(profile, rows, authorized, receivedCodes, dataDate, status, message, false, false);
+    }
+
+    private ScreenDataRespDTO response(String profile, List<List<Object>> rows, List<String> authorized,
+                                       Collection<String> receivedCodes, LocalDate dataDate,
+                                       String status, String message, boolean generatedAmount, boolean generatedSource) {
         String valueColumn = M98StatPolicy.isNplProfile(profile) ? "ratio" : "amount";
         ScreenDataRespDTO response = new ScreenDataRespDTO(
                 List.of("data_date", valueColumn), rows);
         response.setColumnsMeta(List.of(
                 new ScreenDataRespDTO.ColumnMeta("data_date", null, "DIM", null, null),
                 new ScreenDataRespDTO.ColumnMeta(valueColumn, null, "METRIC",
-                        M98StatPolicy.isNplProfile(profile) ? "PERCENT" : null,
+                        M98StatPolicy.isNplProfile(profile) ? "PERCENT" : (generatedAmount ? "YUAN" : null),
                         M98StatPolicy.isNplProfile(profile) ? 2 : null)));
         ScreenDataRespDTO.Quality quality = new ScreenDataRespDTO.Quality(
                 null, dataDate == null ? null : dataDate.toString(), null, status,
                 authorized.size(), receivedCodes.size(), null, null, message);
         quality.setSelectedComplete("COMPLETE".equals(status));
+        if (generatedSource) {
+            quality.setDataClassification("TEST");
+        }
         quality.setMixedPeriod(false);
         quality.setMissing(List.of());
         quality.setMissingSubjects(authorized.stream()
@@ -449,7 +466,7 @@ final class M98StatQuery {
     private record StatRow(String empId, String statisDt, String indType, String indName1,
                            String indName2, String indName3, String subProjType,
                            String subProjCode, String subProjName, String currBal,
-                           String ftpRevenue) {
+                           String ftpRevenue, String dataSrc, String remark) {
     }
 
     private record Mapping(Map<String, String> orgByEmployee, List<String> employeeIds,
@@ -469,6 +486,9 @@ final class M98StatQuery {
         private BigDecimal amount = BigDecimal.ZERO;
         private BigDecimal nplNumerator = BigDecimal.ZERO;
         private BigDecimal nplDenominator = BigDecimal.ZERO;
+        private boolean generated;
+        private boolean generatedSource;
+        private boolean sourceMetadataInvalid;
 
         private void acceptAmount(Object raw) {
             if (!(raw instanceof BigDecimal value)) {
@@ -482,10 +502,31 @@ final class M98StatQuery {
             return invalid ? null : amount;
         }
 
+        private void acceptSource(String dataSrc, String remark) {
+            boolean generatedRow = dataSrc != null && dataSrc.startsWith("GENERATED_SCREEN_");
+            generatedSource = generatedSource || generatedRow;
+            if (!generatedRow) {
+                sourceMetadataInvalid = true;
+                return;
+            }
+            try {
+                JsonNode metadata = OBJECT_MAPPER.readTree(remark);
+                if (metadata == null || !metadata.isObject()
+                        || !"GENERATED".equals(metadata.path("origin").asText(null))
+                        || !"YUAN".equals(metadata.path("amountUnit").asText(null))) {
+                    sourceMetadataInvalid = true;
+                    return;
+                }
+                generated = true;
+            } catch (Exception ex) {
+                sourceMetadataInvalid = true;
+            }
+        }
+
         private void acceptNpl(StatRow row) {
             String category = trimToNull(row.subProjName());
             BigDecimal value = parseDecimal(row.currBal());
-            if (!NPL_CATEGORIES.contains(category) || value == null) {
+            if (!NPL_CATEGORIES.contains(category) || value == null || value.signum() < 0) {
                 invalid = true;
                 return;
             }

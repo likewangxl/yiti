@@ -105,81 +105,48 @@ describe('支行总览入口', () => {
     wrapper.unmount();
   });
 
-  it('默认进入 TEST 屏，先列举机构再按默认 330 查询模型，且不调用触达或旧 live hook', async () => {
+  it('无 source 时默认进入 SCR_PROVINCE 父屏并按机构授权查询', async () => {
     routeState.query = { orgCode: '330' };
-    api.view.mockResolvedValue(testView);
-    api.data.mockImplementation(async request => request.contextParams?.orgCode
-      ? testResponse([request.contextParams.orgCode]) : testResponse());
+    const parent = { ...testView, screenCode: 'SCR_PROVINCE', panoramaInstitutions: [{ orgCode: '330', orgName: '测试三三〇支行', cityCode: '610100', orgNature: 'BRANCH', operatingLevel: 'PRIMARY_BRANCH' }] };
+    api.view.mockResolvedValue(parent);
+    state.model.value = { orgCode: '330', institutions: parent.panoramaInstitutions, kpis: [], trend: [], targets: [], attention: [] };
     const wrapper = mount(BranchOperatingPage);
     await flushPromises();
-    expect(api.view).toHaveBeenCalledWith(BRANCH_TEST_SCREEN_CODE);
-    expect(api.data).toHaveBeenNthCalledWith(1, expect.objectContaining({ screenCode: BRANCH_TEST_SCREEN_CODE, contextParams: {} }));
-    expect(api.data).toHaveBeenNthCalledWith(2, expect.objectContaining({ screenCode: BRANCH_TEST_SCREEN_CODE, contextParams: { orgCode: '330' } }));
-    expect(api.touch).not.toHaveBeenCalled();
-    expect(state.refresh).not.toHaveBeenCalled();
-    expect(wrapper.text()).toContain('测试数据 · 非实际经营数据');
-    expect(wrapper.text()).toContain('测试三三〇支行');
+    expect(api.view).toHaveBeenCalledWith('SCR_PROVINCE');
+    expect(api.data).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain('按正式统计口径计算');
     wrapper.unmount();
   });
 
-  it('TEST 机构范围尊重已有 route orgCode，并拒绝把其他机构数据串入当前模型', async () => {
+  it('父屏机构范围尊重已有 route orgCode，并拒绝把其他机构数据串入当前模型', async () => {
     routeState.query = { orgCode: '331' };
-    api.view.mockResolvedValue(testView);
-    api.data.mockImplementation(async request => request.contextParams?.orgCode
-      ? testResponse([request.contextParams.orgCode]) : testResponse());
+    const parent = { ...testView, screenCode: 'SCR_PROVINCE', panoramaInstitutions: [{ orgCode: '331', orgName: '测试三三一支行', cityCode: '610100', orgNature: 'BRANCH', operatingLevel: 'PRIMARY_BRANCH' }] };
+    api.view.mockResolvedValue(parent);
+    state.model.value = { orgCode: '331', institutions: parent.panoramaInstitutions, kpis: [], trend: [], targets: [], attention: [] };
     const wrapper = mount(BranchOperatingPage);
     await flushPromises();
-    expect(api.data).toHaveBeenNthCalledWith(2, expect.objectContaining({ contextParams: { orgCode: '331' } }));
-    expect(wrapper.text()).toContain('测试三三一支行');
-    expect(wrapper.text()).not.toContain('测试三三〇支行');
+    expect(api.view).toHaveBeenCalledWith('SCR_PROVINCE');
+    expect(api.data).not.toHaveBeenCalled();
     wrapper.unmount();
   });
 
-  it('TEST 显式机构查询失败时清空视图、机构和旧模型，不回退到存量数据', async () => {
+  it('父屏显式机构查询失败时清空视图，不回退到旧测试数据', async () => {
     routeState.query = { orgCode: '330' };
-    api.view.mockResolvedValue(testView);
-    api.data.mockImplementation(async request => request.contextParams?.orgCode
-      ? Promise.reject(new Error('TEST 查询失败')) : testResponse());
+    api.view.mockRejectedValue(new Error('父屏查询失败'));
     const wrapper = mount(BranchOperatingPage);
     await flushPromises();
-    expect(wrapper.text()).toContain('TEST 查询失败');
-    expect(wrapper.text()).not.toContain('测试三三〇支行');
-    expect(api.touch).not.toHaveBeenCalled();
-    expect(state.refresh).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain('父屏数据源权限确认失败');
+    expect(api.data).not.toHaveBeenCalled();
     wrapper.unmount();
   });
 
-  it('场景按钮切换会重新加载另一套视图，不把 TEST 机构模型带入系统存量', async () => {
-    routeState.query = { orgCode: '330' };
-    api.view.mockImplementation(async screenCode => screenCode === BRANCH_TEST_SCREEN_CODE ? testView : {
-      state: 'published', screenCode: 'SCR_CORP_OVERVIEW', runtimeSchemaVersion: 2, orgScopeMode: 'NAMED_GROUP',
-      navigationRules: { allowedOperatingLevels: ['PRIMARY_BRANCH'], allowedOrgNatures: ['BRANCH'] },
-      panoramaInstitutions: [{ orgCode: '330', orgName: '系统存量支行', orgNature: 'BRANCH', operatingLevel: 'PRIMARY_BRANCH' }],
-      renderPackageJson: JSON.stringify({ schemaVersion: 2, components: [], bindSnapshots: {}, canvasStyle: { dataClassification: 'LIVE', presentation: { template: 'corporate-overview-v1' } } })
-    });
-    api.catalog.mockResolvedValue([{ screenCode: 'SCR_CORP_OVERVIEW', template: 'corporate-overview-v1', dataMode: 'LIVE' }]);
-    api.data.mockImplementation(async request => request.contextParams?.orgCode
-      ? testResponse([request.contextParams.orgCode]) : testResponse());
-    api.touch.mockResolvedValue({ orgId: '330', pendingCount: 0 });
+  it('未知 source 参数 fail-close 且不访问旧测试屏', async () => {
+    routeState.query = { source: 'unknown', orgCode: '330' };
     const wrapper = mount(BranchOperatingPage);
     await flushPromises();
-    expect(wrapper.get('[data-testid="branch-operating-test-banner"]').exists()).toBe(true);
-    await wrapper.get('[data-testid="branch-operating-source-live"]').trigger('click');
-    await flushPromises();
-    expect(api.view).toHaveBeenCalledWith('SCR_CORP_OVERVIEW');
-    expect(api.touch).toHaveBeenCalledWith(expect.objectContaining({ orgCode: '330' }));
-    expect(wrapper.find('[data-testid="branch-operating-test-banner"]').exists()).toBe(false);
-    expect(wrapper.text()).toContain('系统存量支行');
-    expect(wrapper.text()).not.toContain('测试三三〇支行');
-    const touchCallsAfterLive = api.touch.mock.calls.length;
-    await wrapper.get('[data-testid="branch-operating-source-test"]').trigger('click');
-    await flushPromises();
-    expect(api.view).toHaveBeenCalledWith(BRANCH_TEST_SCREEN_CODE);
-    expect(api.touch).toHaveBeenCalledTimes(touchCallsAfterLive);
-    expect(state.refresh).toHaveBeenCalled();
-    expect(wrapper.get('[data-testid="branch-operating-test-banner"]').exists()).toBe(true);
-    expect(wrapper.text()).toContain('测试三三〇支行');
-    expect(wrapper.text()).not.toContain('系统存量支行');
+    expect(api.view).not.toHaveBeenCalledWith(BRANCH_TEST_SCREEN_CODE);
+    expect(api.data).not.toHaveBeenCalled();
+    expect(wrapper.find('[data-testid="branch-operating-navigation-blocked"]').exists()).toBe(true);
     wrapper.unmount();
   });
 
@@ -190,8 +157,8 @@ describe('支行总览入口', () => {
     const wrapper = mount(BranchOperatingPage);
     await flushPromises();
     expect(wrapper.find('[data-testid="branch-operating-navigation-blocked"]').exists()).toBe(true);
-    expect(wrapper.text()).toContain('旧链接必须携带已授权机构号');
-    expect(api.data).toHaveBeenCalledTimes(1);
+    expect(wrapper.text()).toContain('父屏导航缺少机构号');
+    expect(api.data).not.toHaveBeenCalled();
     wrapper.unmount();
   });
 
@@ -240,7 +207,7 @@ describe('支行总览入口', () => {
     expect(api.catalog).not.toHaveBeenCalled();
     expect(api.touch).not.toHaveBeenCalled();
     expect(wrapper.find('[data-testid="branch-operating-source-switch"]').exists()).toBe(false);
-    expect(wrapper.text()).toContain('TEST');
+    expect(wrapper.text()).toContain('数据库统计');
     expect(wrapper.text()).toContain('草稿预览');
     expect(wrapper.get('[data-testid="branch-dashboard-probe"]').attributes('data-source-presentation')).toBe('present');
     expect(wrapper.get('[data-testid="branch-dashboard-probe"]').text()).toContain('12');
@@ -277,6 +244,78 @@ describe('支行总览入口', () => {
     wrapper.unmount();
   });
 
+  it('旧 source=test 链接统一复用 SCR_PROVINCE 父屏链路，不读取 9031 FREE_REPORT', async () => {
+    const parentView = {
+      state: 'published', screenCode: 'SCR_PROVINCE', runtimeSchemaVersion: 2, orgScopeMode: 'NAMED_GROUP',
+      institutionRules: { allowedOperatingLevels: ['NONE'], allowedOrgNatures: ['OTHER'], displayOrgCodes: ['105'] },
+      panoramaInstitutions: [{ orgCode: '105', orgName: '延兴门西路支行', cityCode: '610100', operatingLevel: 'NONE', orgNature: 'OTHER' }],
+      renderPackageJson: JSON.stringify({ schemaVersion: 2, canvasStyle: {
+        dataClassification: 'TEST', presentation: { type: 'CODE', template: 'branch-overview-v1' }
+      }, components: [], bindSnapshots: {} })
+    };
+    routeState.query = { source: 'test', orgCode: '105', cityCode: '610100' };
+    api.view.mockResolvedValue(parentView);
+    state.refresh.mockResolvedValue(undefined);
+    state.model.value = { orgCode: '105', institutions: parentView.panoramaInstitutions, kpis: [], trend: [], targets: [], attention: [] };
+    const wrapper = mount(BranchOperatingPage);
+    await flushPromises();
+    expect(api.view).toHaveBeenCalledWith('SCR_PROVINCE');
+    expect(api.view).not.toHaveBeenCalledWith(BRANCH_TEST_SCREEN_CODE);
+    expect(api.data).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain('按正式统计口径计算');
+    wrapper.unmount();
+  });
+
+  it('旧 source=test 链接缺 cityCode 时从唯一授权机构记录补齐城市', async () => {
+    const parentView = {
+      state: 'published', screenCode: 'SCR_PROVINCE', runtimeSchemaVersion: 2, orgScopeMode: 'NAMED_GROUP',
+      institutionRules: { allowedOperatingLevels: ['NONE'], allowedOrgNatures: ['OTHER'], displayOrgCodes: ['105'] },
+      panoramaInstitutions: [{ orgCode: '105', orgName: '延兴门西路支行', cityCode: '610100', operatingLevel: 'NONE', orgNature: 'OTHER' }],
+      renderPackageJson: JSON.stringify({ schemaVersion: 2, canvasStyle: {
+        dataClassification: 'TEST', presentation: { type: 'CODE', template: 'branch-overview-v1' }
+      }, components: [], bindSnapshots: {} })
+    };
+    routeState.query = { source: 'test', orgCode: '105' };
+    api.view.mockResolvedValue(parentView);
+    state.model.value = { orgCode: '105', institutions: parentView.panoramaInstitutions, kpis: [], trend: [], targets: [], attention: [] };
+    const wrapper = mount(BranchOperatingPage);
+    await flushPromises();
+    expect(api.view).toHaveBeenCalledWith('SCR_PROVINCE');
+    expect(wrapper.text()).not.toContain('旧链接缺少唯一的已授权城市上下文');
+    wrapper.unmount();
+  });
+
+  it('旧 source=test 非法机构仍拒绝，不从其他机构推断城市', async () => {
+    const parentView = {
+      state: 'published', screenCode: 'SCR_PROVINCE', runtimeSchemaVersion: 2, orgScopeMode: 'NAMED_GROUP',
+      institutionRules: { allowedOperatingLevels: ['NONE'], allowedOrgNatures: ['OTHER'], displayOrgCodes: ['105'] },
+      panoramaInstitutions: [{ orgCode: '105', orgName: '延兴门西路支行', cityCode: '610100', operatingLevel: 'NONE', orgNature: 'OTHER' }],
+      renderPackageJson: JSON.stringify({ schemaVersion: 2, canvasStyle: {
+        dataClassification: 'TEST', presentation: { type: 'CODE', template: 'branch-overview-v1' }
+      }, components: [], bindSnapshots: {} })
+    };
+    routeState.query = { source: 'test', orgCode: '999' };
+    api.view.mockResolvedValue(parentView);
+    const wrapper = mount(BranchOperatingPage);
+    await flushPromises();
+    expect(wrapper.find('[data-testid="branch-operating-navigation-blocked"]').exists()).toBe(true);
+    expect(api.data).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it('旧链接父屏 403 时 fail-close，且不继续请求业务数据', async () => {
+    routeState.query = { source: 'test', orgCode: '105', cityCode: '610100' };
+    const forbidden = new Error('forbidden');
+    forbidden.response = { status: 403 };
+    api.view.mockRejectedValue(forbidden);
+    const wrapper = mount(BranchOperatingPage);
+    await flushPromises();
+    expect(api.view).toHaveBeenCalledWith('SCR_PROVINCE');
+    expect(api.data).not.toHaveBeenCalled();
+    expect(wrapper.find('[data-testid="branch-operating-navigation-blocked"]').exists()).toBe(true);
+    wrapper.unmount();
+  });
+
   it('parent 路由手动切换机构会重新读取同源屏并按新机构刷新，不保留旧机构模型', async () => {
     const parentView = {
       state: 'draft', screenCode: 'SCR_PROVINCE', runtimeSchemaVersion: 2, orgScopeMode: 'NAMED_GROUP',
@@ -305,7 +344,7 @@ describe('支行总览入口', () => {
     expect(wrapper.get('[data-testid="branch-dashboard-probe"]').text()).toContain('105,110');
     await routerHarness.router.replace({ query: { ...routeState.query, orgCode: '110' } });
     await flushPromises();
-    expect(api.view).toHaveBeenCalledTimes(2);
+    expect(api.view.mock.calls.filter(call => call[0] === 'SCR_PROVINCE').length).toBeGreaterThanOrEqual(2);
     expect(hookHarness.context.value.orgCode).toBe('110');
     expect(wrapper.get('[data-testid="branch-dashboard-probe"]').text()).toContain('未央路支行');
     expect(wrapper.get('[data-testid="branch-dashboard-probe"]').text()).not.toContain('延兴门西路支行');

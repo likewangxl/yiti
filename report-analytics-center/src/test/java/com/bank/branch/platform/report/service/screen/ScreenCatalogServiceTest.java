@@ -82,7 +82,7 @@ class ScreenCatalogServiceTest {
         assertThat(result).extracting(ScreenEntryRespDTO::getBizLine)
                 .containsExactly("COMMON", "RETAIL");
         assertThat(result).extracting(ScreenEntryRespDTO::getDataMode)
-                .containsExactly("TEST", "LIVE");
+                .containsExactly("LIVE", "LIVE");
     }
 
     @Test

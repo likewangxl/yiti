@@ -71,7 +71,9 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
     private static final Set<String> SCREEN_STATUSES = Set.of("ACTIVE", "DISABLED");
     private static final String RUNTIME_CATALOG_SCREEN_CODE = "catalog";
     private static final List<RuntimeCatalogRegistration> CODE_SCREEN_CATALOG = List.of(
-            new RuntimeCatalogRegistration("SCR_PROVINCE", "分行经营总览", "branch-overview-v1", "COMMON", "TEST"),
+            // 运行入口反映服务接入状态；发布包中的 dataClassification 仍单独保留 TEST，
+            // 用于提示当前数据含生成明细，不把模拟来源伪装成生产认证。
+            new RuntimeCatalogRegistration("SCR_PROVINCE", "分行经营总览", "branch-overview-v1", "COMMON", "LIVE"),
             new RuntimeCatalogRegistration("SCR_RETAIL_OVERVIEW", "零售经营总览", "retail-overview-v1", "RETAIL", "LIVE"),
             new RuntimeCatalogRegistration("SCR_CORP_OVERVIEW", "对公经营总览", "corporate-overview-v1", "CORP", "LIVE"));
     /** 逐屏目录校验中可安全排除的授权失败；带 cause 的同码异常表示基础设施失败，必须继续抛出。 */
@@ -1493,7 +1495,8 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
     /**
      * 目录只开放当前 ACTIVE 屏的可信 schema2 CODE 发布包；历史坐标、空包、错模板、坏绑定均
      * 按未接入处理，不能再回退到任何前端演示入口。缺省分类沿用注册项的接口数据模式，显式
-     * TEST 分类才标为测试库数据；dataNotice 只用于展示说明，不能参与分类判断。
+     * 目录数据模式表示入口是否已接入；发布包中的 TEST 分类由运行时质量和来源说明单独展示，
+     * 不能把生成明细伪装为生产真实性认证。
      */
     private String catalogDataMode(RptScreen screen, RuntimeCatalogRegistration registration) {
         try {
@@ -1518,9 +1521,7 @@ public class ScreenConfigServiceImpl implements ScreenConfigService {
             PublishedScreenPackageValidator.requireTrustedBindings(root);
             CodeScreenPresentationValidator.validatePublishedPackage(root);
             validateCodeDatasourceBindings(screen, root, publishedTemplate);
-            String classification = CodeScreenPresentationValidator.dataClassification(
-                    root.path("canvasStyle"));
-            return "TEST".equals(classification) ? "TEST" : registration.dataMode();
+            return registration.dataMode();
         } catch (Exception ex) {
             // 目录是入口授权边界；发布包解析、schema、模板、绑定或来源校验失败时按未接入处理。
             return null;

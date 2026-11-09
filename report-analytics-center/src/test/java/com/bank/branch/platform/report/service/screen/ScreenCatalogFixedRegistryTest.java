@@ -72,7 +72,7 @@ class ScreenCatalogFixedRegistryTest {
         assertThat(entries).extracting(ScreenEntryRespDTO::getBizLine)
                 .containsExactly("COMMON", "RETAIL", "CORP");
         assertThat(entries).extracting(ScreenEntryRespDTO::getDataMode)
-                .containsExactly("TEST", "LIVE", "LIVE");
+                .containsExactly("LIVE", "LIVE", "LIVE");
     }
 
     @Test
@@ -93,7 +93,7 @@ class ScreenCatalogFixedRegistryTest {
         assertThat(service.listAuthorizedCodeScreens()).extracting(ScreenEntryRespDTO::getScreenCode)
                 .containsExactly("SCR_PROVINCE", "SCR_RETAIL_OVERVIEW", "SCR_CORP_OVERVIEW");
         assertThat(service.listAuthorizedCodeScreens()).extracting(ScreenEntryRespDTO::getDataMode)
-                .containsExactly("TEST", "TEST", "LIVE");
+                .containsExactly("LIVE", "LIVE", "LIVE");
 
         corporate.setCanvasPublishedJson("{\"schemaVersion\":2,\"canvasStyle\":{},\"components\":[],\"bindSnapshots\":{}}");
         assertThat(service.listAuthorizedCodeScreens()).extracting(ScreenEntryRespDTO::getScreenCode)

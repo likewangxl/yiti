@@ -57,7 +57,7 @@ import PanoramaRuntime from './panorama/PanoramaRuntime.vue';
 import { BUSINESS_LINE_TARGETS, parseNavigationQuery, resolveInstitution } from './presentation/navigation/navigationModel';
 
 const CATALOG_REGISTRATIONS = Object.freeze({
-  'branch-overview-v1': Object.freeze({ ...BUSINESS_LINE_TARGETS.COMMON, screenName: '分行经营总览', dataModes: Object.freeze(['TEST']) }),
+  'branch-overview-v1': Object.freeze({ ...BUSINESS_LINE_TARGETS.COMMON, screenName: '分行经营总览', dataModes: Object.freeze(['TEST', 'LIVE']) }),
   'corporate-overview-v1': Object.freeze({ ...BUSINESS_LINE_TARGETS.CORP, screenName: '对公经营总览', dataModes: Object.freeze(['TEST', 'LIVE']) }),
   'retail-overview-v1': Object.freeze({ ...BUSINESS_LINE_TARGETS.RETAIL, screenName: '零售经营总览', dataModes: Object.freeze(['TEST', 'LIVE']) })
 });

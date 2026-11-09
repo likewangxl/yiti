@@ -13,6 +13,9 @@
 
 - 代码化大屏模板声明与机构地图边界：`report-analytics-center/src/main/java/com/bank/branch/platform/report/service/screen/CodeScreenPresentationValidator.java`；前端槽位/单位适配：`xanzc_frontend/src/views/screen/panorama/bindings.js`、`dataAdapter.js`。约束与使用步骤见 `docs/modules/report-analytics-center/11-代码化经营大屏.md`。
 
+- 机构指标 SUMMARY：`performance-engine-center/.../service/OrgMetricSummaryCalculator.java`。通过 auth 公共 `OrgApi` 核验直营/子树和全局唯一员工归属，复用绩效模块 Mapper 的同日期同版本批量读数，单位不匹配及缺值 fail-close；`MetricCalcService` 复用任务、持久化和事件流程。
+- 明确生成来源的 M98 单位认证：`report-analytics-center/.../service/screen/M98StatQuery.java`。生成来源提示与金额单位认证分离，未知来源不推断单位；不良率按合计本金计算，已知零本金机构不会污染其余机构合计。
+
 ### 文件上传 + 对象存储（华为云 OBS）
 | 关注点 | 位置 | 说明 |
 |---|---|---|

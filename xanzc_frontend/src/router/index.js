@@ -63,6 +63,19 @@ const routes = [
   }] : []),
   // 经营大屏：顶层全屏路由（不进 DefaultLayout，无 sidebar/header；仍走登录守卫）
   {
+    path: '/screen/SCR_BRANCH_OPERATING_TEST',
+    name: 'LegacyBranchOperatingRedirect',
+    redirect: to => {
+      const query = {};
+      if (typeof to.query?.orgCode === 'string' && to.query.orgCode.trim()) query.orgCode = to.query.orgCode.trim();
+      if (typeof to.query?.cityCode === 'string' && to.query.cityCode.trim()) query.cityCode = to.query.cityCode.trim();
+      return query.orgCode
+        ? { path: '/branch-operating', query }
+        : { path: '/screen-pages/branch-overview-v1' };
+    },
+    meta: { title: '分行经营总览兼容入口', requiredResource: '/api/screen/view/*', hideInMenu: true }
+  },
+  {
     path: '/screen/:screenCode',
     name: 'ScreenView',
     component: () => import('@/views/screen/ScreenRuntimePage.vue'),

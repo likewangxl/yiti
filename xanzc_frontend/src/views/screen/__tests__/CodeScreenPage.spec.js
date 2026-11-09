@@ -180,7 +180,7 @@ describe('CodeScreenPage', () => {
     expect(page.text()).toContain('无权访问');
   });
 
-  it('fails closed for unknown template or non-demo data mode', async () => {
+  it('fails closed for unknown template while accepting a registered LIVE branch entry', async () => {
     routeState.params.template = 'unknown-v1';
     listAvailableScreens.mockResolvedValue([{ ...branch, template: 'unknown-v1' }]);
     let page = await mountPage();
@@ -191,8 +191,8 @@ describe('CodeScreenPage', () => {
     routeState.params.template = 'branch-overview-v1';
     listAvailableScreens.mockResolvedValue([{ ...branch, dataMode: 'LIVE' }]);
     page = await mountPage();
-    expect(page.find('[data-testid="panorama-runtime"]').exists()).toBe(false);
-    expect(page.find('[data-testid="code-screen-unsupported"]').exists()).toBe(true);
+    expect(page.find('[data-testid="panorama-runtime"]').exists()).toBe(true);
+    expect(page.find('[data-testid="code-screen-unsupported"]').exists()).toBe(false);
   });
 
   it('renders a forbidden state for a backend 403 without a dashboard', async () => {

@@ -69,7 +69,8 @@ describe('compositionTabsModel', () => {
       } }
     });
     expect(result.tabs).toHaveLength(2);
-    expect(result.tabs[0]).toMatchObject({ tabKey: 'deposit', state: 'READY', total: { value: 1400 }, other: { value: 113.58 } });
+    expect(result.tabs[0]).toMatchObject({ tabKey: 'deposit', state: 'READY', total: { value: 1400 } });
+    expect(result.tabs[0].other.value).toBeCloseTo(113.58, 8);
     expect(result.tabs[0].corporate.share).toBeCloseTo(51.0186, 3);
     expect(result.tabs[0].retail.share).toBeCloseTo(40.8686, 3);
     expect(result.tabs[1]).toMatchObject({ tabKey: 'loan', state: 'READY' });
@@ -79,8 +80,9 @@ describe('compositionTabsModel', () => {
     expect(result.components[0].sections[0].items.map(item => item.tabKey)).toEqual(['deposit', 'loan']);
     expect(result.sections.map(item => item.sectionKey)).toEqual(['corporate', 'retail', 'income']);
     expect(result.sections[0].items[0]).toMatchObject({
-      total: { value: 1400 }, other: { value: 113.58 }, otherShareText: '8.11285714%'
+      total: { value: 1400 }, otherShareText: '8.11285714%'
     });
+    expect(result.sections[0].items[0].other.value).toBeCloseTo(113.58, 8);
   });
 
   it('total 缺失、缺一方、零分母和负值不计算100%，且返回明确状态', () => {
@@ -130,6 +132,30 @@ describe('compositionTabsModel', () => {
     expect(result.tabs[0].state).toBe('UNIT_MISMATCH');
     expect(result.tabs[0].corporate.share).toBeNull();
     expect(result.tabs[0].retail.share).toBe(40);
+  });
+
+  it('容忍大额合计的机器浮点误差，但拒绝真实超额', () => {
+    const make = (total, corp, retail) => buildCompositionTabsModel(config([
+      tab('deposit', { corporateField: 'corp', retailField: 'retail', totalField: 'total', unit: 'YUAN' })
+    ]), { blockResults: { 11: { corp, retail, total, units: { corp: 'YUAN', retail: 'YUAN', total: 'YUAN' } } } }).tabs[0];
+    expect(make(2373538539.25, 1253278740.31, 1120259798.94).state).toBe('READY');
+    expect(make(37356426.72, 25407506.13, 11948920.59).state).toBe('READY');
+    expect(make(100, 50, 50.0001).state).toBe('READY');
+    expect(make(100, 50, 50.01).state).toBe('READY');
+    expect(make(100, 50, 50.0001).gap?.value ?? make(100, 50, 50.0001).other?.value).toBeGreaterThan(0);
+  });
+
+  it('遵守组件 decimals 显示精度但不舍入计算值，单位换算仍保持原始计算值语义', () => {
+    const presentation = config([tab('deposit', { unit: 'TEN_THOUSAND' })]);
+    presentation.display.components[0].format = { decimals: 2 };
+    const result = buildCompositionTabsModel(presentation, { blockResults: { 11: {
+      corp: 1253278740.31, retail: 1120259798.94, total: 2373538539.25,
+      units: { corp: 'YUAN', retail: 'YUAN', total: 'YUAN' }
+    } } });
+    expect(result.tabs[0].corporate.value).toBeCloseTo(125327.874031, 6);
+    expect(result.tabs[0].corporate.text).toBe('125,327.87');
+    expect(result.tabs[0].total.value).toBeCloseTo(237353.853925, 6);
+    expect(result.tabs[0].total.text).toBe('237,353.85');
   });
 
   it('模型只产出默认10秒或显式轮播间隔，不创建定时器', () => {

@@ -53,10 +53,11 @@ function unitScale(unit) {
   return ({ YUAN: 1, TEN_THOUSAND: 1e4, HUNDRED_MILLION: 1e8, COUNT: 1, TEN_THOUSAND_COUNT: 1e4 }[unit] || 1);
 }
 
-function formatNumber(value) {
+function formatNumber(value, decimals) {
   const number = finite(value);
   if (number === null) return '—';
-  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 8 }).format(number);
+  const maximumFractionDigits = Number.isInteger(decimals) && decimals >= 0 && decimals <= 8 ? decimals : 8;
+  return new Intl.NumberFormat('en-US', { maximumFractionDigits }).format(number);
 }
 
 function presentationFrom(source) {
@@ -150,14 +151,14 @@ function blankValue(unit = '') {
   return { value: null, text: '—', unit: unitLabel(unit), share: null, shareText: '占比不可计算' };
 }
 
-function readTabValue(source, field, configuredUnit) {
+function readTabValue(source, field, configuredUnit, decimals) {
   const raw = readField(source, field);
   const unit = fieldUnit(source, field, configuredUnit);
   const normalized = normalizeValue(raw.raw, unit, configuredUnit);
   return {
     exists: raw.exists,
     value: normalized.value,
-    text: normalized.value === null ? '—' : formatNumber(normalized.value),
+    text: normalized.value === null ? '—' : formatNumber(normalized.value, decimals),
     unit: normalized.unit,
     type: normalized.type,
     valid: normalized.valid,
@@ -188,7 +189,10 @@ function addShares(tab) {
   const corporateShare = corporateValid ? Math.round((corporate.value / total * 100) * 1e12) / 1e12 : null;
   const retailShare = retailValid ? Math.round((retail.value / total * 100) * 1e12) / 1e12 : null;
   const missingSide = corporateShare === null || retailShare === null;
-  const difference = missingSide ? null : Math.round((total - corporate.value - retail.value) * 1e12) / 1e12;
+  const rawDifference = missingSide ? null : total - corporate.value - retail.value;
+  const scale = missingSide ? 1 : Math.max(Math.abs(total), Math.abs(corporate.value + retail.value), 1);
+  const floatingPointEpsilon = Number.EPSILON * scale * 16;
+  const difference = rawDifference !== null && Math.abs(rawDifference) <= floatingPointEpsilon ? 0 : rawDifference;
   const withShare = (item, share) => ({ ...item, share, shareText: share === null ? '待接入' : `${formatNumber(share)}%` });
   const hasInvalidValue = (corporate.value !== null && corporate.value < 0) || (retail.value !== null && retail.value < 0);
   const hasUnitMismatch = corporate.unitMismatch || retail.unitMismatch;
@@ -259,14 +263,15 @@ function buildSections(tabs, intermediaryIncome) {
   ];
 }
 
-function buildTab(tabConfig, source, index) {
+function buildTab(tabConfig, source, index, componentFormat = {}) {
   const tabKey = text(tabConfig?.tabKey) || `tab-${index}`;
   const label = text(tabConfig?.label) || tabKey;
   const configuredUnit = text(tabConfig?.unit) || '';
-  const corporate = readTabValue(source, tabConfig?.corporateField, configuredUnit);
-  const retail = readTabValue(source, tabConfig?.retailField, configuredUnit);
+  const decimals = Number.isInteger(tabConfig?.format?.decimals) ? tabConfig.format.decimals : componentFormat.decimals;
+  const corporate = readTabValue(source, tabConfig?.corporateField, configuredUnit, decimals);
+  const retail = readTabValue(source, tabConfig?.retailField, configuredUnit, decimals);
   const total = text(tabConfig?.totalField)
-    ? readTabValue(source, tabConfig.totalField, configuredUnit)
+    ? readTabValue(source, tabConfig.totalField, configuredUnit, decimals)
     : blankValue(configuredUnit);
   const base = {
     tabKey,
@@ -316,7 +321,7 @@ export function buildCompositionTabsModel(sourcePresentation, model = {}, option
   const rawComponents = sortComponents(Array.isArray(presentation.display?.components) ? presentation.display.components : []);
   const components = rawComponents.map((component, index) => {
     const configs = legacyProvinceRingConfigs(component, presentation.template);
-    const tabs = configs.map((tabConfig, tabIndex) => buildTab(tabConfig, lookupSource(isObject(model) ? model : {}, component, tabConfig), tabIndex));
+    const tabs = configs.map((tabConfig, tabIndex) => buildTab(tabConfig, lookupSource(isObject(model) ? model : {}, component, tabConfig), tabIndex, component.format || {}));
     const source = lookupSource(isObject(model) ? model : {}, component, null);
     const intermediaryIncome = buildIntermediaryIncome(component.content, source);
     return {
