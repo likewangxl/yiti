@@ -44,7 +44,7 @@
           v-for="region in fallbackRegions"
           :key="region.key"
           class="panorama-map__region"
-          :class="{ 'is-selected': region.code && String(region.code) === String(selectedRegionCode), 'is-hovered': String(region.code) === hoveredRegionCode, 'is-metric-missing': metricState(region) === 'MISSING', 'is-has-institution': metricState(region) === 'HAS_INSTITUTION', 'is-no-institution': metricState(region) === 'NO_INSTITUTION' }"
+          :class="{ 'is-selected': !shouldHideEmptyCityLabel(region) && region.code && String(region.code) === String(selectedRegionCode), 'is-hovered': !shouldHideEmptyCityLabel(region) && String(region.code) === hoveredRegionCode, 'is-metric-missing': metricState(region) === 'MISSING', 'is-has-institution': metricState(region) === 'HAS_INSTITUTION', 'is-no-institution': metricState(region) === 'NO_INSTITUTION' }"
         >
           <path
             :d="region.path"
@@ -53,9 +53,10 @@
             :data-region-name="region.name"
             :data-metric-state="metricState(region)"
             :data-region-state="metricState(region)"
+            :class="{ 'is-empty-city': shouldHideEmptyCityLabel(region) }"
             :style="metricStyle(region)"
-            role="button"
-            tabindex="0"
+            :role="shouldHideEmptyCityLabel(region) ? undefined : 'button'"
+            :tabindex="shouldHideEmptyCityLabel(region) ? -1 : 0"
             :aria-label="`选择${region.name || '行政区'}`"
             @click.stop="selectRegion(region)"
             @pointerenter="setHoveredRegion(region.code)"
@@ -64,7 +65,7 @@
             @keydown.space.prevent.stop="selectRegion(region)"
           />
           <circle
-            v-if="mode === 'province' && regionLabels.some(item => item.key === region.key) && (isCalloutLayout || metricState(region) !== 'NO_INSTITUTION')"
+            v-if="mode === 'province' && regionLabels.some(item => item.key === region.key) && (isCalloutLayout || metricState(region) !== 'NO_INSTITUTION') && !shouldHideEmptyCityLabel(region)"
             :cx="fallbackRegionMarkerPoint(region).x"
             :cy="fallbackRegionMarkerPoint(region).y"
             r="1.55"
@@ -179,6 +180,7 @@
         v-for="(region, index) in visibleHaloRegions"
         :key="`${region.key}:halo`"
         class="panorama-map__city-halo"
+        :data-city-code="region.code"
         :class="{ 'is-violet': index % 2 === 1, 'is-no-institution': metricState(region) === 'NO_INSTITUTION' }"
         :style="cityHaloStyle(region)"
       ></span>
@@ -724,7 +726,7 @@ function shouldHideEmptyCityLabel(region) {
 }
 const displayRegionLabels = computed(() => regionLabels.value.filter(region => !shouldHideEmptyCityLabel(region)));
 const visibleHaloRegions = computed(() => regionLabels.value.filter(region =>
-  isCalloutLayout.value || metricState(region) !== 'NO_INSTITUTION'
+  (isCalloutLayout.value || metricState(region) !== 'NO_INSTITUTION') && !shouldHideEmptyCityLabel(region)
 ));
 
 function regionLabelWorldPoint(region) {
@@ -805,15 +807,15 @@ function isRegionMetricMissing(region) {
 function metricStyle(region) {
   if (props.colorByCity && props.mode === 'province') {
     const baseColor = cityColorForRegion(region);
-    const active = String(region.code) === String(hoveredRegionCode.value)
-      || String(region.code) === String(props.selectedRegionCode);
+    const active = !shouldHideEmptyCityLabel(region) && (String(region.code) === String(hoveredRegionCode.value)
+      || String(region.code) === String(props.selectedRegionCode));
     return { fill: active ? highlightCityColor(baseColor) : baseColor, '--city-color': baseColor };
   }
   if (!props.colorByMetric) return undefined;
   const color = metricColorForCode(region.code);
   if (props.mode === 'city') {
-    const active = String(region.code) === String(hoveredRegionCode.value)
-      || String(region.code) === String(props.selectedRegionCode);
+    const active = !shouldHideEmptyCityLabel(region) && (String(region.code) === String(hoveredRegionCode.value)
+      || String(region.code) === String(props.selectedRegionCode));
     const state = metricState(region);
     return {
       fill: active ? highlightCityColor(color) : color,
@@ -898,6 +900,7 @@ const activeCityDetail = computed(() => {
   if (!cityHoverDetailsEnabled.value || !hoveredRegionCode.value) return null;
   const region = regionLabels.value.find(item => String(item.code) === hoveredRegionCode.value);
   if (!region) return null;
+  if (shouldHideEmptyCityLabel(region)) return null;
   const detail = props.cityDetails[hoveredRegionCode.value] || {};
   const institutions = Array.isArray(detail.institutions) ? detail.institutions : [];
   if (props.cityDetailMode === 'institutions') {
@@ -1018,6 +1021,7 @@ function regionActivationStatus(region) {
 
 function selectRegion(region) {
   if (Date.now() < suppressActivationUntil) return;
+  if (shouldHideEmptyCityLabel(region)) return;
   const status = regionActivationStatus(region);
   if (status) {
     announceActivationStatus(status);
@@ -1679,6 +1683,10 @@ function leaveHoveredRegion() {
 }
 function setHoveredRegion(code) {
   keepCityDetail();
+  const region = regionLabels.value.find(item => String(item.code) === String(code));
+  if (region && shouldHideEmptyCityLabel(region)) {
+    code = '';
+  }
   const next = (reliefEnabled.value || isCalloutLayout.value || (props.mode === 'city' && fallbackActive.value)) && code
     ? String(code)
     : '';
@@ -1907,10 +1915,11 @@ onBeforeUnmount(() => {
 .panorama-map__fallback { z-index: 1; padding: var(--fallback-inset-top, 18px) var(--fallback-inset-right, 52px) var(--fallback-inset-bottom, 24px) var(--fallback-inset-left, 22px); }
 .panorama-map__svg { display: block; width: 100%; height: 100%; overflow: visible; }
 .panorama-map__region path { fill: rgba(58, 83, 177, .76); stroke: #83b9ff; stroke-width: .24; vector-effect: non-scaling-stroke; cursor: pointer; transition: fill .2s ease; }
-.panorama-map__region path:hover,
-.panorama-map__region path:focus-visible,
-.panorama-map__region.is-selected path,
-.panorama-map__region.is-hovered path { fill: rgba(131, 84, 217, .9); stroke: #f3c8ff; outline: none; }
+.panorama-map__region path.is-empty-city { cursor: default; transition: none; }
+.panorama-map__region path:not(.is-empty-city):hover,
+.panorama-map__region path:not(.is-empty-city):focus-visible,
+.panorama-map__region.is-selected path:not(.is-empty-city),
+.panorama-map__region.is-hovered path:not(.is-empty-city) { fill: rgba(131, 84, 217, .9); stroke: #f3c8ff; outline: none; }
 .panorama-map__region.is-has-institution path { stroke: #70e5e8; stroke-width: .34; }
 .panorama-map__region-label text { fill: rgba(227, 239, 255, .88); font-size: 2.1px; text-anchor: middle; pointer-events: auto; cursor: pointer; }
 .panorama-map__region-label.is-has-institution text { fill: #a8fbf4; font-size: 2.4px; font-weight: 700; }

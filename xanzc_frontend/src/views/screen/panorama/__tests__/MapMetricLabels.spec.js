@@ -480,6 +480,7 @@ describe('城市悬浮详情', () => {
         appearance: 'relief',
         labelLayout: 'callout',
         hideEmptyCityLabels: true,
+        selectedRegionCode: '610200',
         regionStates: { '610100': 'HAS_INSTITUTION', '610200': 'NO_INSTITUTION' },
         metricValues: { '610100': 0 },
         cityDetails: { '610100': { institutionCount: 1, institutions: [{ orgCode: 'A' }] }, '610200': { institutionCount: 0, institutions: [] } }
@@ -490,6 +491,12 @@ describe('城市悬浮详情', () => {
     expect(wrapper.find('[data-testid="map-city-callout-line"][data-city-code="610200"]').exists()).toBe(false);
     expect(wrapper.find('button[data-city-code="610100"]').exists()).toBe(true);
     expect(wrapper.findAll('[data-region-code]').length).toBe(2);
+    const emptySurface = wrapper.get('[data-region-code="610200"]');
+    await emptySurface.trigger('pointerenter');
+    await emptySurface.trigger('click');
+    expect(wrapper.attributes('data-hovered-region')).toBe('');
+    expect(wrapper.find('[data-testid="map-activation-status"]').exists()).toBe(false);
+    expect(wrapper.emitted('region-select')).toBeUndefined();
     wrapper.unmount();
   });
 
@@ -521,6 +528,12 @@ describe('城市悬浮详情', () => {
     await hidden.vm.$nextTick();
     expect(hidden.find('button[data-city-code="610100"]').exists()).toBe(false);
     expect(hidden.find('button[data-city-code="610200"]').exists()).toBe(true);
+    expect(hidden.vm.visibleHaloRegions.map(r => r.code)).not.toContain('610100');
+    await hidden.get('[data-region-code="610100"]').trigger('pointerenter');
+    await hidden.get('[data-region-code="610100"]').trigger('click');
+    expect(hidden.attributes('data-hovered-region')).toBe('');
+    expect(hidden.find('[role="tooltip"]').exists()).toBe(false);
+    expect(hidden.emitted('region-select')).toBeUndefined();
     hidden.unmount();
   });
 
@@ -539,6 +552,25 @@ describe('城市悬浮详情', () => {
     await wrapper.vm.$nextTick();
     expect(wrapper.find('button[data-city-code="610100"]').exists()).toBe(true);
     expect(wrapper.find('button[data-city-code="610200"]').exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it('空城禁用选中与键盘入口，同时保留默认 inline 地图的标记规则', async () => {
+    const props = { geoJson, appearance: 'relief', labelLayout: 'inline',
+      regionStates: { '610100': 'HAS_INSTITUTION', '610200': 'NO_INSTITUTION' },
+      cityDetails: { '610100': { institutionCount: 1 }, '610200': { institutionCount: 0 } } };
+    const original = mount(PanoramaMap, { props });
+    expect(original.vm.visibleHaloRegions.map(r => r.code)).not.toContain('610200');
+    original.unmount();
+    const wrapper = mount(PanoramaMap, { props: { ...props, hideEmptyCityLabels: true, selectedRegionCode: '610200' } });
+    await wrapper.vm.$nextTick();
+    const surface = wrapper.get('[data-region-code="610200"]');
+    expect(surface.attributes('tabindex')).toBe('-1');
+    expect(surface.element.parentElement.classList.contains('is-selected')).toBe(false);
+    await surface.trigger('keydown', { key: 'Enter' });
+    expect(wrapper.emitted('region-select')).toBeUndefined();
+    expect(wrapper.find('[data-testid="map-activation-status"]').exists()).toBe(false);
+    expect(wrapper.vm.visibleHaloRegions.map(r => r.code)).not.toContain('610200');
     wrapper.unmount();
   });
 
