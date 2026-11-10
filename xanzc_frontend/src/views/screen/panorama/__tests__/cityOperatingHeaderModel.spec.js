@@ -56,6 +56,35 @@ describe('cityOperatingHeaderModel', () => {
     expect(result.model).not.toHaveProperty('blockResults');
   });
 
+  it('优先保留已发布城市顶部配置，并透传城市级比较字段', () => {
+    const configured = {
+      displayPresentation: {
+        displaySchemaVersion: 1,
+        template: 'branch-overview-v1',
+        display: { components: [
+          { componentId: 'city-header-deposit', componentType: 'METRIC_CARD', layoutRegion: 'HEADER', visible: true },
+          { componentId: 'city-composition', componentType: 'COMPOSITION_TABS', layoutRegion: 'LEFT', visible: true },
+          { componentId: 'city-center-trend', componentType: 'TREND', layoutRegion: 'CENTER', visible: true },
+          { componentId: 'city-hidden-loan', componentType: 'METRIC_CARD', layoutRegion: 'HEADER', visible: false }
+        ] }
+      }
+    };
+    const citySummary = {
+      dataDate: '2026-11-09',
+      kpis: [{ key: 'deposit', value: 1.4, unit: '亿元' }],
+      blockResults: { '60': { rows: [{ cityCode: '610300' }] } },
+      comparisonResults: { deposit: { month: { value: 0.1 } } },
+      periodComparisonConfig: { month: { mode: 'OFFSET' } },
+      periodComparisonSources: { month: { metricCode: 'M_DEP' } }
+    };
+    const result = buildCityOperatingHeaderModel(configured, citySummary);
+    expect(result.presentation.display.components.map(item => item.componentId)).toEqual(['city-header-deposit', 'city-composition']);
+    expect(result.model.blockResults).toEqual(citySummary.blockResults);
+    expect(result.model.comparisonResults).toEqual(citySummary.comparisonResults);
+    expect(result.model.periodComparisonConfig).toEqual(citySummary.periodComparisonConfig);
+    expect(result.model.periodComparisonSources).toEqual(citySummary.periodComparisonSources);
+  });
+
   it('存贷款构成字段日期不一致时不生成跨期构成来源', () => {
     const result = buildCityOperatingHeaderModel(sourcePresentation, {
       kpis: [

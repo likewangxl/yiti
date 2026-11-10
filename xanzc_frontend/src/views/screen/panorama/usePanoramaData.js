@@ -30,6 +30,7 @@ import {
 } from './batchQuality';
 import { comparisonDates } from '../presentation/model/explicitComparisons';
 import { indexPeriodComparisonSources, normalizePeriodComparisonMap } from '../presentation/model/periodComparisons';
+import { buildCityOperatingSummaries } from './cityOperatingSummary';
 
 const MAX_CONCURRENCY = 3;
 
@@ -417,7 +418,9 @@ function normalizeBlockResult(blockId, binding, response) {
     units: Object.freeze(cloneRawValue(binding?.units || {})),
     unitByField: Object.freeze(unitByField),
     ...(aliasIssues.length ? { aliasIssues } : {}),
-    ...(quality ? { quality } : {}),
+    ...(quality ? { quality: { ...quality,
+      ...(String(table.quality?.subjectValueMode || '').toUpperCase() === 'EXCLUSIVE' ? { subjectValueMode: 'EXCLUSIVE' } : {})
+    } } : {}),
     ...(responseDataDate(table) ? { dataDate: responseDataDate(table) } : {})
   };
   return Object.freeze(result);
@@ -611,6 +614,64 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
       else addIssue(issues, 'periodComparison', 'INVALID_RESPONSE', '基准日回推响应不是有效二维数据', String(item.blockId));
     }
     return { results, issues };
+  }
+
+  // 城市沿用已发布的独占机构明细。基期逐日查同一批次，禁止把跨日存量相加。
+  async function loadCityOperatingSummaries(packageInfo, view, context, modelValue, generationToken) {
+    const entry = packageInfo.slots.get('citySummary');
+    const table = modelValue.blockResults?.[String(entry?.blockId)];
+    const presentation = presentationFromPackage(packageInfo.package);
+    if (options.singleOrg || presentation?.template !== 'branch-overview-v1' || !entry || !table) return {};
+    const args = {
+      table, snapshot: entry.snapshot, directory: view.panoramaInstitutions || view.panorama_institutions || [],
+      snapshots: packageInfo.package.bindSnapshots, presentation
+    };
+    const current = buildCityOperatingSummaries(args);
+    if (!Object.keys(current).length) return {};
+    const batchId = table.quality?.batchId;
+    const historyTables = {};
+    const issues = [];
+    if (batchId && Object.keys(modelValue.periodComparisonConfig || {}).length) {
+      const dates = [...new Set(Object.values(comparisonDates(modelValue.dataDate)).filter(Boolean))];
+      const { body, schema } = makeRequest(entry, view, context, '', batchId);
+      const requests = dates.map(date => ({ entry, schema, date,
+        body: { ...body, period: 'RANGE', dateFrom: date, dateTo: date, batchId } }));
+      const results = await runQueue(requests, 'cityComparison', generationToken);
+      for (const result of results) {
+        if (result.cancelled) continue;
+        if (result.error) {
+          if ([401, 403].includes(permissionStatus(result.error))) return { permissionError: result.error };
+          addIssue(issues, 'citySummary', 'HISTORY_REQUEST_FAILED', '城市比较期取数失败', result.date);
+          continue;
+        }
+        const normalized = normalizeBlockResult(entry.blockId, entry.binding, result.response);
+        if (!normalized || normalized.quality?.batchId !== batchId) {
+          addIssue(issues, 'citySummary', 'HISTORY_BATCH_MISMATCH', '城市比较期批次不一致', result.date);
+          continue;
+        }
+        historyTables[result.date] = normalized;
+      }
+    }
+    const summaries = buildCityOperatingSummaries({ ...args, historyTables });
+    for (const city of Object.values(summaries)) {
+      city.periodComparisonConfig = modelValue.periodComparisonConfig || {};
+      city.periodComparisonSources = indexPeriodComparisonSources({
+        configs: city.periodComparisonConfig,
+        slots: { deposit: packageInfo.slots.get('deposit')?.blockId, loan: packageInfo.slots.get('loan')?.blockId },
+        components: presentation?.display?.components || [], blockResults: city.blockResults,
+        rangeResults: city.rangeResults || {}, dataDate: city.dataDate
+      }).sources;
+      // 供未单独配置比较规则的比例卡复用：唯一城市历史来源，绝不带入父屏历史总量。
+      const currentTable = city.blockResults[String(entry.blockId)];
+      const history = city.rangeResults?.[String(entry.blockId)];
+      if (currentTable && history?.rows?.length) {
+        const historyKey = `city-history:${entry.blockId}`;
+        city.blockResults[historyKey] = { ...currentTable, blockId: historyKey,
+          rows: [...currentTable.rows, ...history.rows] };
+      }
+      delete city.rangeResults;
+    }
+    return { summaries, issues };
   }
 
   async function loadExplicitComparisons(packageInfo, view, context, modelValue, generationToken, batchState) {
@@ -1051,6 +1112,16 @@ export function usePanoramaData(viewSource, contextSource, options = {}) {
         nextModel.periodComparisonConfig = periodConfigs;
         nextModel.periodComparisonSources = indexed.sources;
         nextModel.issues = [...(nextModel.issues || []), ...(periodRangeLoad.issues || [])];
+        const cityLoad = await loadCityOperatingSummaries(packageInfo, view, context, nextModel, currentGeneration);
+        if (!alive.value || disposed.value || screenGeneration.value !== currentGeneration) return model.value;
+        if (cityLoad.permissionError) {
+          model.value = emptyModel(retail, view, queriedAt);
+          model.value.permissionStatus = permissionStatus(cityLoad.permissionError);
+          error.value = errorMessage(cityLoad.permissionError, '城市比较期无权访问');
+          return model.value;
+        }
+        nextModel.citySummaries = { ...nextModel.citySummaries, ...(cityLoad.summaries || {}) };
+        nextModel.issues.push(...(cityLoad.issues || []));
         nextModel.configuredSlots = [...slots.keys()];
         nextModel.permissionStatus = null;
         if (requiresBatch) {

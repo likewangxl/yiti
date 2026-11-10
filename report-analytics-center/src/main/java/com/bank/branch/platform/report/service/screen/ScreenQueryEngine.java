@@ -414,7 +414,10 @@ public class ScreenQueryEngine {
                 ? List.of() : snapshot.getRows();
         // LATEST 必须使用选中不可变批次的 rows；historyRows 只服务于历史周期，避免历史金融列
         // 覆盖当前批次已计算的客户/目标/率等输出指标。
-        if (!period.latestOnly() && (rawRows || "DATE".equals(groupBy))) {
+        boolean singleDateSubjectHistory = !period.latestOnly()
+                && "SUBJECT".equals(groupBy)
+                && period.from().equals(period.to());
+        if (!period.latestOnly() && (rawRows || "DATE".equals(groupBy) || singleDateSubjectHistory)) {
             sourceRows = snapshot.getHistoryRows() == null || snapshot.getHistoryRows().isEmpty()
                     ? sourceRows : snapshot.getHistoryRows();
         }
@@ -446,8 +449,9 @@ public class ScreenQueryEngine {
                 rows.add(output);
             }
         } else if ("SUBJECT".equals(groupBy)) {
+            LocalDate subjectDate = singleDateSubjectHistory ? period.from() : snapshot.getDataDate();
             for (BranchDashboardBatchRowDTO row : visibleRows.stream()
-                    .filter(r -> snapshot.getDataDate().equals(r.getDataDate()))
+                    .filter(r -> subjectDate.equals(r.getDataDate()))
                     .limit(limit)
                     .toList()) {
                 List<Object> output = new ArrayList<>();

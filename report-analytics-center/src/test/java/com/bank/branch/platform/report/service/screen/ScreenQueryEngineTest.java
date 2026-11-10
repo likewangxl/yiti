@@ -701,6 +701,62 @@ class ScreenQueryEngineTest {
     }
 
     @Test
+    void batchPolicy_subjectSingleDateRangeUsesHistoryRowsPerInstitution() {
+        BranchDashboardBatchQueryApi batchApi = mock(BranchDashboardBatchQueryApi.class);
+        BranchDashboardBatchDTO snapshot = BranchDashboardBatchDTO.builder()
+                .batchId("RUN-20260710-SUBJECT-HISTORY").groupCode("GROUP_CORP")
+                .dataDate(LocalDate.of(2026, 7, 10)).version("V2").status("COMPLETE")
+                .memberOrgCodes(List.of("001", "002"))
+                .quality(BranchDashboardQualityDTO.builder().expectedSubjects(2).receivedSubjects(2)
+                        .selectedComplete(true).build())
+                .metricContracts(Map.of("M_0001", BranchDashboardMetricContractDTO.builder()
+                        .metricCode("M_0001").metricName("存款余额").unit("YUAN").build()))
+                .rows(List.of(
+                        BranchDashboardBatchRowDTO.builder().orgCode("001").dataDate(LocalDate.of(2026, 7, 10))
+                                .metricValues(Map.of("M_0001", BigDecimal.valueOf(300))).build(),
+                        BranchDashboardBatchRowDTO.builder().orgCode("002").dataDate(LocalDate.of(2026, 7, 10))
+                                .metricValues(Map.of("M_0001", BigDecimal.valueOf(500))).build()))
+                .historyRows(List.of(
+                        BranchDashboardBatchRowDTO.builder().orgCode("001").dataDate(LocalDate.of(2026, 7, 9))
+                                .metricValues(Map.of("M_0001", BigDecimal.valueOf(280))).build(),
+                        BranchDashboardBatchRowDTO.builder().orgCode("002").dataDate(LocalDate.of(2026, 7, 9))
+                                .metricValues(Map.of("M_0001", BigDecimal.valueOf(480))).build(),
+                        BranchDashboardBatchRowDTO.builder().orgCode("003").dataDate(LocalDate.of(2026, 7, 9))
+                                .metricValues(Map.of("M_0001", BigDecimal.valueOf(9999))).build()))
+                .build();
+        when(batchApi.latest("GROUP_CORP", List.of("001", "002"))).thenReturn(Optional.of(snapshot));
+
+        ScreenQueryEngine queryEngine = engine(null, mock(OrgApi.class));
+        queryEngine.setBatchQueryApi(batchApi);
+        ScreenDataReqDTO request = namedGroupRequest("001", "002");
+        request.setServerGroupCode("GROUP_CORP");
+        request.setPeriod("RANGE");
+        request.setDateFrom("2026-07-09");
+        request.setDateTo("2026-07-09");
+        String config = "{\"scopeMode\":\"NAMED_GROUP\",\"table\":\"ORG_INDEX_RESULT\","
+                + "\"metrics\":[{\"metricCode\":\"M_0001\",\"metricName\":\"存款余额\",\"slot\":3}],"
+                + "\"aggregation\":{\"groupBy\":\"SUBJECT\",\"agg\":\"SUM\"},"
+                + "\"batchPolicy\":{\"requiredComplete\":true}}";
+
+        ScreenDataRespDTO response = queryEngine.queryAt(
+                datasource(config), request, TODAY, 10);
+
+        assertThat(response.getRows()).containsExactly(
+                Arrays.asList("001", null, BigDecimal.valueOf(280)),
+                Arrays.asList("002", null, BigDecimal.valueOf(480)));
+        verify(batchApi).latest("GROUP_CORP", List.of("001", "002"));
+        request.setPeriod("LATEST");
+        assertThat(queryEngine.queryAt(datasource(config), request, TODAY, 10).getRows()).containsExactly(
+                Arrays.asList("001", null, BigDecimal.valueOf(300)),
+                Arrays.asList("002", null, BigDecimal.valueOf(500)));
+        request.setPeriod("RANGE");
+        request.setDateTo("2026-07-10");
+        assertThat(queryEngine.queryAt(datasource(config), request, TODAY, 10).getRows()).containsExactly(
+                Arrays.asList("001", null, BigDecimal.valueOf(300)),
+                Arrays.asList("002", null, BigDecimal.valueOf(500)));
+    }
+
+    @Test
     void batchPolicy_latestFailedAttemptIsVisibleWhileReturningLastCompleteSnapshot() {
         BranchDashboardBatchQueryApi batchApi = mock(BranchDashboardBatchQueryApi.class);
         BranchDashboardBatchDTO snapshot = BranchDashboardBatchDTO.builder()

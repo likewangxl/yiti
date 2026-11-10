@@ -12,7 +12,8 @@ const COMPLETION_RING_IDS = new Set([
   'business-corp-deposit-rate', 'business-corp-loan-rate'
 ]);
 const CITY_SUMMARY_MODEL_FIELDS = Object.freeze([
-  'blockResults', 'displayValues', 'metricValues', 'blocks', 'results', 'composition'
+  'blockResults', 'displayValues', 'metricValues', 'blocks', 'results', 'composition',
+  'comparisonResults', 'periodComparisonConfig', 'periodComparisonSources'
 ]);
 
 function isObject(value) {
@@ -112,9 +113,16 @@ function citySummaryModel(summary) {
   return model;
 }
 
-function headerPresentation() {
+function headerPresentation(sourcePresentation) {
   const fallback = buildBranchOverviewPresentation(null);
-  const components = (fallback.display?.components || [])
+  const configured = presentationOf(sourcePresentation);
+  const configuredComponents = Array.isArray(configured.display?.components)
+    ? configured.display.components.filter(component => isObject(component) && component.visible !== false
+      && (component.layoutRegion === 'HEADER'
+        || (component.layoutRegion === 'LEFT' && component.componentType === 'COMPOSITION_TABS')))
+    : [];
+  const source = configuredComponents.length ? configuredComponents : (fallback.display?.components || []);
+  const components = source
     .filter(component => component.layoutRegion === 'HEADER'
       || (component.layoutRegion === 'LEFT' && component.componentType === 'COMPOSITION_TABS'))
     .map(component => ({
@@ -131,7 +139,7 @@ function headerPresentation() {
 export function buildCityOperatingHeaderModel(sourcePresentation, citySummary) {
   return {
     enabled: isCityOperatingHeaderEnabled(sourcePresentation),
-    presentation: headerPresentation(),
+    presentation: headerPresentation(sourcePresentation),
     model: citySummaryModel(citySummary)
   };
 }
