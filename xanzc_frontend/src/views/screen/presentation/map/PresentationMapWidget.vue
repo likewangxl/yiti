@@ -38,6 +38,7 @@
       appearance="relief"
       :label-layout="legacyBranchProvinceMap ? 'callout' : (provinceInlineMap ? 'inline' : 'callout')"
       :point-label-layout="mode === 'city' ? 'callout' : 'inline'"
+      :hide-empty-city-labels="hideEmptyCityLabels"
       class="presentation-map-widget__map"
       @region-select="onRegionSelect"
       @branch-select="onBranchSelect"
@@ -86,7 +87,8 @@ const props = defineProps({
   metricKey: { type: String, default: '' },
   dataDate: { type: String, default: '' },
   demo: { type: Boolean, default: false },
-  viewFit: { type: Object, default: () => ({}) }
+  viewFit: { type: Object, default: () => ({}) },
+  hideEmptyCityLabels: { type: Boolean, default: false }
 });
 
 const emit = defineEmits(['region-select', 'branch-select', 'map-context']);

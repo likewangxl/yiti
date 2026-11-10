@@ -263,6 +263,7 @@
             :selected-region-code="selectedCityCode"
             :data-date="displayDate"
             :demo="demo"
+            hide-empty-city-labels
             @region-select="selectCity"
             @branch-select="openInstitutionFromMap"
             @map-context="emit('map-context', $event)"
@@ -280,6 +281,7 @@
             :color-by-metric="true"
             :geo-json="provinceGeoJson"
             :points="safeModel.institutions"
+            :hide-empty-city-labels="true"
             :demo="demo"
             mode="province"
             :selected-region-code="selectedCityCode"

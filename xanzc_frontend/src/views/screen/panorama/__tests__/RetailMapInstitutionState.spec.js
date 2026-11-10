@@ -18,7 +18,8 @@ vi.mock('../PanoramaMap.vue', () => ({
       metricNumericValues: { type: Object, default: () => ({}) },
       metricColors: { type: Object, default: () => ({}) },
       regionStates: { type: Object, default: () => ({}) },
-      colorByMetric: { type: Boolean, default: false }
+      colorByMetric: { type: Boolean, default: false },
+      hideEmptyCityLabels: { type: Boolean, default: false }
     },
     emits: ['region-select', 'branch-select'],
     template: '<div data-testid="retail-map" :data-mode="mode" :data-appearance="appearance" :data-label-layout="labelLayout" :data-color-by-metric="String(colorByMetric)" :data-region-states="JSON.stringify(regionStates)" :data-metric-colors="JSON.stringify(metricColors)"></div>'
@@ -74,12 +75,13 @@ describe('RetailDashboard legacy map institution state', () => {
     });
     mounted.push(wrapper);
 
-    const map = wrapper.get('[data-testid="retail-map"]');
-    expect(map.attributes('data-mode')).toBe('province');
-    expect(map.attributes('data-appearance')).toBe('relief');
-    expect(map.attributes('data-label-layout')).toBe('callout');
-    expect(map.attributes('data-color-by-metric')).toBe('true');
-    expect(JSON.parse(map.attributes('data-region-states'))).toMatchObject({
+    const map = wrapper.getComponent({ name: 'PanoramaMap' });
+    expect(map.props('mode')).toBe('province');
+    expect(map.props('appearance')).toBe('relief');
+    expect(map.props('labelLayout')).toBe('callout');
+    expect(map.props('hideEmptyCityLabels')).toBe(true);
+    expect(map.props('colorByMetric')).toBe(true);
+    expect(map.props('regionStates')).toMatchObject({
       '610100': 'HAS_INSTITUTION',
       '610300': 'HAS_INSTITUTION',
       '610200': 'NO_INSTITUTION'
@@ -97,7 +99,7 @@ describe('RetailDashboard legacy map institution state', () => {
       ...baseModel,
       institutions: [{ orgCode: 'NEW', name: '新机构', cityCode: '610200', cityName: '铜川市' }]
     } });
-    const states = JSON.parse(wrapper.get('[data-testid="retail-map"]').attributes('data-region-states'));
+    const states = wrapper.getComponent({ name: 'PanoramaMap' }).props('regionStates');
     expect(states).toMatchObject({
       '610100': 'NO_INSTITUTION',
       '610200': 'HAS_INSTITUTION',

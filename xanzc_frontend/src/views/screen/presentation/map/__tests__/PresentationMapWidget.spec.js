@@ -35,7 +35,7 @@ const model = {
 };
 
 const mapStub = {
-  props: ['geoJson', 'points', 'metricLabel', 'metricValues', 'metricNumericValues', 'metricColors', 'regionStates', 'cityDetails', 'cityDetailMode', 'colorByCity', 'labelLayout', 'pointLabelLayout', 'showRegionMetrics', 'showProvincePointLabels', 'mode', 'selectedRegionCode', 'selectedOrgCode', 'showProvincePoints', 'viewFit'],
+  props: ['geoJson', 'points', 'metricLabel', 'metricValues', 'metricNumericValues', 'metricColors', 'regionStates', 'cityDetails', 'cityDetailMode', 'colorByCity', 'labelLayout', 'pointLabelLayout', 'showRegionMetrics', 'showProvincePointLabels', 'mode', 'selectedRegionCode', 'selectedOrgCode', 'showProvincePoints', 'viewFit', 'hideEmptyCityLabels'],
   template: '<div data-testid="panorama-map-stub"><button data-city="610100" @click="$emit(\'region-select\', { code: \'610100\', name: \'西安市\' })">城市</button><button data-org="A" @click="$emit(\'branch-select\', \'A\')">机构</button></div>'
 };
 
@@ -78,6 +78,16 @@ describe('PresentationMapWidget', () => {
     expect(wrapper.getComponent(mapStub).props('showRegionMetrics')).toBe(false);
     expect(wrapper.getComponent(mapStub).props('showProvincePointLabels')).toBe(false);
     expect(wrapper.getComponent(mapStub).props('pointLabelLayout')).toBe('inline');
+    expect(wrapper.getComponent(mapStub).props('hideEmptyCityLabels')).toBe(false);
+  });
+
+  it('零售路径可显式隐藏无机构地市标签，同时保留行政区地图', () => {
+    const wrapper = mount(PresentationMapWidget, {
+      props: { presentation, model, geoJson, mode: 'province', metricKey: 'deposit', hideEmptyCityLabels: true },
+      global: { stubs: { PanoramaMap: mapStub } }
+    });
+    expect(wrapper.getComponent(mapStub).props('hideEmptyCityLabels')).toBe(true);
+    expect(wrapper.getComponent(mapStub).props('geoJson').features).toHaveLength(1);
   });
 
   it('无坐标机构由旁侧可访问列表进入，并向上发固定上下文事件', async () => {

@@ -73,7 +73,7 @@
             aria-hidden="true"
           />
         </g>
-        <g v-if="!isCalloutLayout && !reliefEnabled" v-for="region in regionLabels" :key="`${region.key}:label`" class="panorama-map__region-label" :class="{ 'is-has-institution': metricState(region) === 'HAS_INSTITUTION', 'is-no-institution': metricState(region) === 'NO_INSTITUTION' }">
+        <g v-if="!isCalloutLayout && !reliefEnabled" v-for="region in displayRegionLabels" :key="`${region.key}:label`" class="panorama-map__region-label" :class="{ 'is-has-institution': metricState(region) === 'HAS_INSTITUTION', 'is-no-institution': metricState(region) === 'NO_INSTITUTION' }">
           <text :x="region.label.x" :y="region.label.y" role="button" tabindex="0" @click.stop="selectRegion(region)" @keydown.enter.stop="selectRegion(region)">{{ region.name }}</text>
           <text v-if="showInlineRegionMetric(region)" :x="region.label.x" :y="region.label.y + 3" data-testid="map-region-metric" class="panorama-map__metric-svg">{{ metricValues[region.code] }}</text>
         </g>
@@ -86,7 +86,7 @@
       preserveAspectRatio="none"
       aria-hidden="true"
     >
-      <template v-for="region in regionLabels" :key="`${region.key}:callout`">
+      <template v-for="region in displayRegionLabels" :key="`${region.key}:callout`">
       <g v-if="cityDetailMode !== 'institutions' || hasInstitutionDetail(region)" class="panorama-map__callout" :class="{ 'is-active': String(region.code) === hoveredRegionCode, 'is-missing': isRegionMetricMissing(region), 'is-has-institution': metricState(region) === 'HAS_INSTITUTION', 'is-no-institution': metricState(region) === 'NO_INSTITUTION' }" :style="cityAccentStyle(region)" :data-city-code="region.code">
         <path :d="calloutPath(region)" class="panorama-map__callout-glow" />
         <path
@@ -116,7 +116,7 @@
     </svg>
     <div v-if="!fallbackActive || isCalloutLayout || reliefEnabled" class="panorama-map__region-label-layer" aria-label="可选择城市标签">
       <button
-        v-for="region in regionLabels"
+        v-for="region in displayRegionLabels"
         :key="`${region.key}:overlay-label`"
         type="button"
         class="panorama-map__region-label-hit"
@@ -337,7 +337,8 @@ const props = defineProps({
   appearance: { type: String, default: 'classic' },
   labelLayout: { type: String, default: 'inline' },
   pointLabelLayout: { type: String, default: 'inline' },
-  viewFit: { type: Object, default: () => ({}) }
+  viewFit: { type: Object, default: () => ({}) },
+  hideEmptyCityLabels: { type: Boolean, default: false }
 });
 
 const emit = defineEmits(['region-select', 'branch-select']);
@@ -708,6 +709,20 @@ const regionLabels = computed(() => {
     };
   });
 });
+function shouldHideEmptyCityLabel(region) {
+  if (!props.hideEmptyCityLabels) return false;
+  const detail = props.cityDetails?.[region.code];
+  const rawCount = detail?.institutionCount;
+  const validCount = rawCount !== null && rawCount !== undefined && rawCount !== ''
+    && typeof rawCount !== 'boolean' && !Array.isArray(rawCount) && typeof rawCount !== 'object'
+    && Number.isFinite(Number(rawCount)) && Number(rawCount) >= 0;
+  if (Array.isArray(detail?.institutions) && detail.institutions.length > 0) return false;
+  if (validCount && Number(rawCount) > 0) return false;
+  if (Array.isArray(detail?.institutions) && detail.institutions.length === 0 && validCount && Number(rawCount) === 0) return true;
+  if (validCount && Number(rawCount) === 0) return true;
+  return metricState(region) === 'NO_INSTITUTION';
+}
+const displayRegionLabels = computed(() => regionLabels.value.filter(region => !shouldHideEmptyCityLabel(region)));
 const visibleHaloRegions = computed(() => regionLabels.value.filter(region =>
   isCalloutLayout.value || metricState(region) !== 'NO_INSTITUTION'
 ));
@@ -751,7 +766,7 @@ const metricLabelPositions = computed(() => {
   if (!Object.keys(props.metricValues).length) return {};
   const width=containerRef.value?.clientWidth || 800;
   const height=containerRef.value?.clientHeight || 520;
-  return layoutMapLabels(regionLabels.value.map(region => {
+  return layoutMapLabels(displayRegionLabels.value.map(region => {
     const point=overlayPoint(regionLabelWorldPoint(region));
     const value=showInlineRegionMetric(region) ? props.metricValues[region.code] : null;
     const constrainToRegion = reliefEnabled.value && props.mode === 'province' && !isCalloutLayout.value;
@@ -841,7 +856,7 @@ const calloutLayout = computed(() => {
   void overlayRevision.value;
   const width = Math.max(1, containerRef.value?.clientWidth || 800);
   const height = Math.max(1, containerRef.value?.clientHeight || 520);
-  return layoutMapCallouts(regionLabels.value.map(region => {
+  return layoutMapCallouts(displayRegionLabels.value.map(region => {
     const metric = metricDisplayValue(region);
     const widthPixels = Math.max(
       String(region.name || '').length * 12 + 12,

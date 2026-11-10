@@ -472,6 +472,76 @@ describe('城市悬浮详情', () => {
     wrapper.unmount();
   });
 
+  it('hideEmptyCityLabels 只移除 NO_INSTITUTION 标签与引线，保留零值/缺失机构城市和行政区 polygon', async () => {
+    const wrapper = mount(PanoramaMap, {
+      global: { stubs: { Teleport: true } },
+      props: {
+        geoJson,
+        appearance: 'relief',
+        labelLayout: 'callout',
+        hideEmptyCityLabels: true,
+        regionStates: { '610100': 'HAS_INSTITUTION', '610200': 'NO_INSTITUTION' },
+        metricValues: { '610100': 0 },
+        cityDetails: { '610100': { institutionCount: 1, institutions: [{ orgCode: 'A' }] }, '610200': { institutionCount: 0, institutions: [] } }
+      }
+    });
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('button[data-city-code="610200"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="map-city-callout-line"][data-city-code="610200"]').exists()).toBe(false);
+    expect(wrapper.find('button[data-city-code="610100"]').exists()).toBe(true);
+    expect(wrapper.findAll('[data-region-code]').length).toBe(2);
+    wrapper.unmount();
+  });
+
+  it('默认开关关闭时保留无机构城市标签兼容行为', async () => {
+    const wrapper = mount(PanoramaMap, {
+      global: { stubs: { Teleport: true } },
+      props: { geoJson, appearance: 'relief', labelLayout: 'callout', regionStates: { '610200': 'NO_INSTITUTION' } }
+    });
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('button[data-city-code="610200"]').exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it('MISSING 状态优先服从明确 cityDetails 机构明细，0 家隐藏、1 家保留', async () => {
+    const base = {
+      geoJson,
+      appearance: 'relief',
+      labelLayout: 'callout',
+      hideEmptyCityLabels: true,
+      regionStates: { '610100': 'MISSING', '610200': 'MISSING' }
+    };
+    const hidden = mount(PanoramaMap, {
+      global: { stubs: { Teleport: true } },
+      props: { ...base, cityDetails: {
+        '610100': { institutionCount: 0, institutions: [] },
+        '610200': { institutionCount: 1, institutions: [{ orgCode: 'A' }] }
+      } }
+    });
+    await hidden.vm.$nextTick();
+    expect(hidden.find('button[data-city-code="610100"]').exists()).toBe(false);
+    expect(hidden.find('button[data-city-code="610200"]').exists()).toBe(true);
+    hidden.unmount();
+  });
+
+  it('正向机构证据优先于空数组，未知计数不把 MISSING 误判为空城', async () => {
+    const wrapper = mount(PanoramaMap, {
+      global: { stubs: { Teleport: true } },
+      props: {
+        geoJson, appearance: 'relief', labelLayout: 'callout', hideEmptyCityLabels: true,
+        regionStates: { '610100': 'MISSING', '610200': 'MISSING' },
+        cityDetails: {
+          '610100': { institutions: [], institutionCount: 2 },
+          '610200': { institutions: [], institutionCount: null }
+        }
+      }
+    });
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('button[data-city-code="610100"]').exists()).toBe(true);
+    expect(wrapper.find('button[data-city-code="610200"]').exists()).toBe(true);
+    wrapper.unmount();
+  });
+
   it('机构模式无经营机构地市把名称放回对应区域并阻止下钻，有机构地市仍保留外围 callout', async () => {
     const cityDetails = {
       '610100': { institutionCount: 1, institutions: [{ orgCode: 'XIAN-1', orgName: '西安一支行' }] },
