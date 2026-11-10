@@ -78,7 +78,7 @@ describe('PresentationMapWidget', () => {
     expect(wrapper.getComponent(mapStub).props('showRegionMetrics')).toBe(false);
     expect(wrapper.getComponent(mapStub).props('showProvincePointLabels')).toBe(false);
     expect(wrapper.getComponent(mapStub).props('pointLabelLayout')).toBe('inline');
-    expect(wrapper.getComponent(mapStub).props('hideEmptyCityLabels')).toBe(false);
+    expect(wrapper.getComponent(mapStub).props('hideEmptyCityLabels')).toBe(true);
   });
 
   it('零售路径可显式隐藏无机构地市标签，同时保留行政区地图', () => {
@@ -105,6 +105,50 @@ describe('PresentationMapWidget', () => {
     expect(wrapper.getComponent(mapStub).props('showProvincePoints')).toBe(false);
     expect(wrapper.getComponent(mapStub).props('pointLabelLayout')).toBe('callout');
     expect(wrapper.getComponent(mapStub).props('showRegionMetrics')).toBe(false);
+  });
+
+  it('市级地图不把机构城市明细误当区县机构明细', () => {
+    const wrapper = mount(PresentationMapWidget, {
+      props: { presentation, model, geoJson, mode: 'city', cityCode: '610100', metricKey: 'deposit' },
+      global: { stubs: { PanoramaMap: mapStub } }
+    });
+    expect(wrapper.getComponent(mapStub).props('cityDetails')).toEqual({});
+    expect(wrapper.getComponent(mapStub).props('hideEmptyCityLabels')).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('非 legacy 省级地图实际挂载时隐藏 0 家地市并保留 1 家地市选择', async () => {
+    const mapGeoJson = {
+      type: 'FeatureCollection',
+      features: [
+        { type: 'Feature', properties: { adcode: '610100', name: '西安市' }, geometry: { type: 'Polygon', coordinates: [[[108, 34], [109, 34], [109, 35], [108, 35], [108, 34]]] } },
+        { type: 'Feature', properties: { adcode: '610200', name: '铜川市' }, geometry: { type: 'Polygon', coordinates: [[[109, 34], [110, 34], [110, 35], [109, 35], [109, 34]]] } },
+        { type: 'Feature', properties: { adcode: '610300', name: '宝鸡市' }, geometry: { type: 'Polygon', coordinates: [[[107, 34], [108, 34], [108, 35], [107, 35], [107, 34]]] } }
+      ]
+    };
+    const wrapper = mount(PresentationMapWidget, {
+      props: {
+        presentation,
+        model: { ...model, institutions: [model.institutions[0], { ...model.institutions[0], orgCode: 'C', cityCode: '610300' }] },
+        geoJson: mapGeoJson,
+        mode: 'province',
+        metricKey: 'deposit',
+        hideEmptyCityLabels: true
+      }
+    });
+    await new Promise(resolve => setTimeout(resolve, 30));
+    expect(wrapper.find('[data-city-code="610200"]').exists()).toBe(false);
+    expect(wrapper.find('[data-city-code="610100"]').exists()).toBe(true);
+    expect(wrapper.find('[data-city-code="610300"]').exists()).toBe(true);
+    const empty = wrapper.find('[data-region-code="610200"]');
+    expect(empty.exists()).toBe(true);
+    await empty.trigger('pointerenter');
+    await empty.trigger('click');
+    expect(wrapper.find('[data-testid="map-activation-status"]').exists()).toBe(false);
+    expect(wrapper.emitted('region-select')).toBeUndefined();
+    await wrapper.get('[data-region-code="610300"]').trigger('click');
+    expect(wrapper.emitted('region-select')).toContainEqual([{ code: '610300', name: '宝鸡市' }]);
+    wrapper.unmount();
   });
 
   it('旧省级屏编码切换为机构视图，隐藏业务指标与机构点但保留机构占用状态', () => {
@@ -146,7 +190,8 @@ describe('PresentationMapWidget', () => {
       global: { stubs: { PanoramaMap: mapStub } }
     });
     expect(unrelated.getComponent(mapStub).props('labelLayout')).toBe('callout');
-    expect(unrelated.getComponent(mapStub).props('cityDetails')).toEqual({});
+    expect(unrelated.getComponent(mapStub).props('cityDetails')['610100']).toMatchObject({ institutionCount: 2 });
+    expect(unrelated.getComponent(mapStub).props('hideEmptyCityLabels')).toBe(true);
     expect(unrelated.getComponent(mapStub).props('colorByCity')).toBe(false);
     unrelated.unmount();
 
@@ -165,7 +210,7 @@ describe('PresentationMapWidget', () => {
     });
     expect(v2TemplateBranch.getComponent(mapStub).props('labelLayout')).toBe('inline');
     expect(v2TemplateBranch.getComponent(mapStub).props('cityDetailMode')).toBe('metrics');
-    expect(v2TemplateBranch.getComponent(mapStub).props('cityDetails')).toEqual({});
+    expect(v2TemplateBranch.getComponent(mapStub).props('cityDetails')['610100']).toMatchObject({ institutionCount: 2 });
     expect(v2TemplateBranch.getComponent(mapStub).props('colorByCity')).toBe(false);
     v2TemplateBranch.unmount();
 

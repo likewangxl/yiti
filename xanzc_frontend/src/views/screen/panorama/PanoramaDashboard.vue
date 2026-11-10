@@ -260,6 +260,7 @@
             :selected-region-code="selectedRegionCode"
             :data-date="displayDate"
             :demo="demo"
+            :hide-empty-city-labels="true"
             @region-select="openCity"
             @branch-select="selectInstitution"
           />
@@ -276,6 +277,7 @@
             :color-by-city="true"
             :show-region-metrics="false"
             :show-province-points="false"
+            hide-empty-city-labels
             :city-details="provinceMapInstitutionDetails"
             city-detail-mode="institutions"
             :geo-json="provinceGeoJson"

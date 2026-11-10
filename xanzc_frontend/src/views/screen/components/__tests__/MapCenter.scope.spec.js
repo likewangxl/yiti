@@ -114,6 +114,47 @@ describe('MapCenter schema v1/v2', () => {
     expect(depthLayers.map(series => series.layoutCenter[1])).toEqual(['56%', '55%', '54%']);
   });
 
+  it('运行态省级地图隐藏无机构地市标签并禁用空地市强调与点击', async () => {
+    const wrapper = mount(MapCenter, { props: {
+      mapPoints: [
+        { orgCode: 'XA', orgName: '西安分行', lng: 108.94, lat: 34.34 },
+        { orgCode: 'BJ', orgName: '宝鸡分行', lng: 107.24, lat: 34.36 }
+      ]
+    } });
+    const option = wrapper.findComponent({ name: 'VChart' }).props('option');
+    const xian = option.geo.regions.find(region => region.name === '西安市');
+    const tongchuan = option.geo.regions.find(region => region.name === '铜川市');
+    expect(xian.label.show).toBe(true);
+    expect(tongchuan.label.show).toBe(false);
+    expect(tongchuan.emphasis.disabled).toBe(true);
+    expect(tongchuan.silent).toBe(true);
+    expect(xian.silent).toBe(false);
+    expect(option.geo.label.formatter({ name: '铜川市' })).toBe('');
+    expect(option.tooltip.formatter({ componentType: 'geo', name: '铜川市' })).toBe('');
+    wrapper.findComponent({ name: 'VChart' }).vm.$emit('click', { componentType: 'geo', name: '铜川市' });
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('.mp-region-detail').exists()).toBe(false);
+  });
+
+  it('省级空城判定合并画像且保留无效归属为未知', () => {
+    const withProfile = mount(MapCenter, { props: {
+      mapPoints: [],
+      profiles: [{ orgCode: 'XA-P', cityCode: '610100', status: 'ACTIVE', orgNature: 'BRANCH' }]
+    } });
+    const option = withProfile.findComponent({ name: 'VChart' }).props('option');
+    expect(option.geo.regions.find(region => region.name === '西安市').label.show).toBe(true);
+    expect(option.geo.regions.find(region => region.name === '铜川市').label.show).toBe(false);
+    withProfile.unmount();
+
+    const unknown = mount(MapCenter, { props: {
+      mapPoints: [{ orgCode: 'UNKNOWN', orgName: '待归属机构' }],
+      profiles: [{ orgCode: 'XA-P', cityCode: '610100', status: 'ACTIVE', orgNature: 'BRANCH' }]
+    } });
+    const unknownOption = unknown.findComponent({ name: 'VChart' }).props('option');
+    expect(unknownOption.geo.regions.find(region => region.name === '铜川市').label.show).toBe(true);
+    unknown.unmount();
+  });
+
   it('无真实指标时明确启用稳定模拟数据，不把演示值伪装成数据库数据', () => {
     const wrapper = mount(MapCenter, { props: { mapPoints: [] } });
     expect(wrapper.find('.mp-demo-badge').text()).toContain('模拟演示');
@@ -173,7 +214,7 @@ describe('MapCenter schema v1/v2', () => {
     expect(baoji.itemStyle.areaColor).toBe('#b9852f');
     expect(xian.itemStyle.areaColor).toBe('#27364f');
     expect(option.geo.label.formatter({ name: '宝鸡市' })).toContain('86.2%');
-    expect(option.geo.label.formatter({ name: '西安市' })).toContain('--');
+    expect(option.geo.label.formatter({ name: '西安市' })).toBe('');
   });
 
   it('切换存款达成后同步更新地图颜色、排名与包含目标缺口的悬浮卡', async () => {

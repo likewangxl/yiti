@@ -176,11 +176,12 @@
             :selected-region-code="selectedCityCode"
             :data-date="displayDate"
             :demo="demo"
+            :hide-empty-city-labels="true"
             @region-select="selectCity"
             @branch-select="openInstitutionFromMap"
             @map-context="emit('map-context', $event)"
           />
-          <PanoramaMap v-else class="corporate-map" appearance="relief" label-layout="callout" :city-details="corporateMapCityDetails" :metric-label="rankingMetricInfo.label" :metric-values="corporateMapMetricValues" :data-metric-label="rankingMetricInfo.label" :region-states="corporateMapInstitutionState.regionStates" :metric-colors="corporateMapInstitutionState.metricColors" :color-by-metric="true" :geo-json="provinceGeoJson" :points="safeModel.institutions" :demo="demo" mode="province" :selected-region-code="selectedCityCode" @region-select="selectCity" @branch-select="openInstitutionFromMap" />
+          <PanoramaMap v-else class="corporate-map" appearance="relief" label-layout="callout" hide-empty-city-labels :city-details="corporateMapCityDetails" :metric-label="rankingMetricInfo.label" :metric-values="corporateMapMetricValues" :data-metric-label="rankingMetricInfo.label" :region-states="corporateMapInstitutionState.regionStates" :metric-colors="corporateMapInstitutionState.metricColors" :color-by-metric="true" :geo-json="provinceGeoJson" :points="safeModel.institutions" :demo="demo" mode="province" :selected-region-code="selectedCityCode" @region-select="selectCity" @branch-select="openInstitutionFromMap" />
           <p v-if="selectedCityCode" class="corporate-selected-city" data-testid="corporate-selected-city">当前机构分析：{{ selectedCityName }}（{{ filteredRankings.length }} 家有排名记录）</p>
         </article>
         <div class="corporate-trend-zone">

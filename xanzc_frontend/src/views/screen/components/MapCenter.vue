@@ -282,6 +282,35 @@ const cityDistrictRegions = computed(() => (selectedCityGeo.value?.features || [
 }).filter(([name]) => Boolean(name)));
 const featureList = computed(() => (isComposite.value ? xianSixDistricts.features
   : (isCityDistrict.value ? (selectedCityGeo.value?.features || []) : shaanxiGeo.features)) || []);
+const occupiedProvinceRegions = computed(() => {
+  if (isComposite.value || isCityDistrict.value) return null;
+  const records = [
+    ...points.value,
+    ...profileList.value.filter(profile => {
+      const status = String(profile?.status ?? profile?.recordStatus ?? 'ACTIVE').toUpperCase();
+      const nature = String(profile?.orgNature ?? profile?.org_nature ?? '').toUpperCase();
+      return status === 'ACTIVE' && nature !== 'DEPARTMENT';
+    })
+  ];
+  if (!records.length) return null;
+  const names = new Set();
+  let unknown = false;
+  for (const point of records) {
+    const code = String(point?.cityCode ?? point?.city_code ?? '').trim();
+    const lng = finiteNumber(point?.lng ?? point?.longitude);
+    const lat = finiteNumber(point?.lat ?? point?.latitude);
+    const feature = code
+      ? featureList.value.find(item => String(item.properties?.adcode || item.properties?.code || '') === code)
+      : (lng !== null && lat !== null ? featureList.value.find(item => featureContainsPoint(item, [lng, lat])) : null);
+    if (feature?.properties?.name) names.add(feature.properties.name);
+    else unknown = true;
+  }
+  return { names, unknown };
+});
+function isEmptyProvinceRegion(name) {
+  const state = occupiedProvinceRegions.value;
+  return Boolean(state && !state.unknown && !state.names.has(name));
+}
 const pointByOrg = computed(() => new Map(points.value.filter(point => point?.orgCode)
   .map(point => [String(point.orgCode), point])));
 const regionMetricMap = computed(() => {
@@ -322,10 +351,12 @@ const mapRegions = computed(() => (isComposite.value
   : (isCityDistrict.value ? cityDistrictRegions.value : SHAANXI_REGION_COLORS))
   .map(([name, areaColor, hoverColor]) => ({
   name,
+  silent: isEmptyProvinceRegion(name),
+  label: { show: !isEmptyProvinceRegion(name) },
   // 演示态保留每个行政区的独立底色，完成率直接写在标签；真实指标到达后切换为统一状态色。
   itemStyle: { areaColor: metricRows.value.length ? achievementColor(metricDetail(name).rate) : areaColor,
     borderColor: achievementColor(metricDetail(name).rate) },
-  emphasis: { itemStyle: { areaColor: metricRows.value.length ? achievementColor(metricDetail(name).rate) : hoverColor } }
+  emphasis: isEmptyProvinceRegion(name) ? { disabled: true } : { itemStyle: { areaColor: metricRows.value.length ? achievementColor(metricDetail(name).rate) : hoverColor } }
 })));
 
 const orgMetricMap = computed(() => new Map(metricRows.value.filter(row => row?.orgCode)
@@ -507,6 +538,7 @@ const option = computed(() => ({
     extraCssText: 'box-sizing:border-box;max-width:min(304px,calc(100vw - 24px));max-height:calc(100vh - 24px);overflow-y:auto;white-space:normal;overflow-wrap:anywhere;',
     position: positionMapTooltip,
     formatter: params => {
+      if (params?.seriesType !== 'effectScatter' && isEmptyProvinceRegion(params?.name)) return '';
       if (params?.seriesType === 'effectScatter') return `${params.name}<br/>点击进入机构详情屏`;
       const detail = metricDetail(params?.name);
       const unit = selectedMetric.value.unit || '';
@@ -525,7 +557,7 @@ const option = computed(() => ({
     z: 4,
     regions: mapRegions.value,
     label: { show: true, color: '#d7e8ff', fontSize: (isComposite.value || isCityDistrict.value) ? 11 : 12,
-      formatter: params => `${params.name}\n${formatMetricValue(metricDetail(params.name).rate)}%`,
+      formatter: params => isEmptyProvinceRegion(params.name) ? '' : `${params.name}\n${formatMetricValue(metricDetail(params.name).rate)}%`,
       lineHeight: 17, textBorderColor: 'rgba(2, 10, 31, .9)', textBorderWidth: 3 },
     itemStyle: {
       areaColor: '#153a63',
@@ -580,6 +612,7 @@ function navigate(node) {
 function onChartClick(params) {
   if ((params?.componentType === 'geo' || params?.seriesType === 'map')
     && featureList.value.some(feature => feature.properties?.name === params?.name)) {
+    if (isEmptyProvinceRegion(params.name)) return;
     selectedRegionName.value = params.name;
     detailOpen.value = true;
     return;

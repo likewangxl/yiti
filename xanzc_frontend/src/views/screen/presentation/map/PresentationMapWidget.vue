@@ -38,7 +38,7 @@
       appearance="relief"
       :label-layout="legacyBranchProvinceMap ? 'callout' : (provinceInlineMap ? 'inline' : 'callout')"
       :point-label-layout="mode === 'city' ? 'callout' : 'inline'"
-      :hide-empty-city-labels="hideEmptyCityLabels"
+      :hide-empty-city-labels="mode === 'province' && hideEmptyCityLabels"
       class="presentation-map-widget__map"
       @region-select="onRegionSelect"
       @branch-select="onBranchSelect"
@@ -88,7 +88,7 @@ const props = defineProps({
   dataDate: { type: String, default: '' },
   demo: { type: Boolean, default: false },
   viewFit: { type: Object, default: () => ({}) },
-  hideEmptyCityLabels: { type: Boolean, default: false }
+  hideEmptyCityLabels: { type: Boolean, default: true }
 });
 
 const emit = defineEmits(['region-select', 'branch-select', 'map-context']);
@@ -146,8 +146,11 @@ const legacyMapTitle = computed(() => {
   return component?.text?.titleMode === 'CUSTOM' && String(component.text.title || '').trim()
     ? String(component.text.title).trim() : '经营机构分布';
 });
-const mapCityDetails = computed(() => legacyBranchProvinceMap.value
-  ? buildCityInstitutionDetails({ institutions: mapModel.value.institutions }, { geoJson: props.geoJson })
+const mapCityDetails = computed(() => props.mode === 'province'
+  ? buildCityInstitutionDetails(
+    { institutions: mapModel.value.institutions },
+    { geoJson: props.geoJson }
+  )
   : {});
 const legacyBranchInstitutionState = computed(() => buildProvinceInstitutionMapState(
   props.geoJson,
