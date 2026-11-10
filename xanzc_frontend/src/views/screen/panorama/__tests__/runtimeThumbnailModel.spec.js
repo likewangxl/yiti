@@ -58,13 +58,21 @@ describe('runtimeThumbnailModel', () => {
     ], template: 'corporate-overview-v1' });
     expect(corp.filter(item => item.entryKey === 'corpDeposit').map(item => item.selector)).toEqual(['.corporate-kpi:nth-of-type(1)', '[data-testid="corporate-deposit-balance"]']);
     expect(corp.find(item => item.entryKey === 'corpSegments').selector).toBe('[data-testid="corporate-segments"]');
-    expect(corp.find(item => item.entryKey === 'corpAttention').selector).toBe('[data-testid="corporate-attention"]');
+    expect(corp.find(item => item.entryKey === 'corpAttention').selector).toBe(null);
     expect(corp.find(item => item.entryKey === 'corpRanking').selector).toBe('.corporate-ranking-panel');
     expect(corp.find(item => item.entryKey === 'corpTargets').selector).toBe('.corporate-target-panel');
     const retail = runtimeThumbnailTargets({ entries: [{ key: 'retailDeposit' }, { key: 'retailSegments' }, { key: 'retailRanking' }], template: 'retail-overview-v1' });
     expect(retail.filter(item => item.entryKey === 'retailDeposit').map(item => item.selector)).toEqual(['.retail-kpi:nth-of-type(2)', '[data-testid="retail-deposit-balance"]']);
     expect(retail.find(item => item.entryKey === 'retailSegments').selector).toBe('[data-testid="retail-segments"]');
     expect(retail.find(item => item.entryKey === 'retailRanking').selector).toBe('.retail-ranking-panel');
+  });
+
+  it('对公规模质量区复用已有 KPI 配置，不提供待办配置入口', () => {
+    const targets = runtimeThumbnailTargets({ entries: ['corpLoan', 'corpNplRate', 'corpRevenue'].map(key => ({ key })), template: 'corporate-overview-v1' });
+    for (const key of ['corpLoan', 'corpNplRate', 'corpRevenue']) {
+      expect(targets.filter(item => item.entryKey === key)).toHaveLength(2);
+      expect(targets.find(item => item.entryKey === key && item.occurrence === 1).selector).toBe(`[data-testid="corporate-quality-kpi"][data-kpi-key="${key}"]`);
+    }
   });
 
   it('分行完成率与上下钻页面选择器对应真实区域', () => {

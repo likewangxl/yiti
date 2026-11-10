@@ -66,14 +66,14 @@ describe('CorporateDashboard 对公经营总览', () => {
     expect(wrapper.findAll('[data-testid="corporate-kpi"]')).toHaveLength(6);
     expect(wrapper.text()).toContain('对公存款经营');
     expect(wrapper.text()).toContain('重点客群信贷');
-    expect(wrapper.text()).toContain('需要协调的事项');
-    expect(wrapper.text()).toContain('对公存款排名');
+    expect(wrapper.text()).toContain('经营规模与质量');
+    expect(wrapper.text()).toContain('机构经营对照');
     expect(wrapper.text()).toContain('对公经营目标');
     expect(wrapper.find('[data-testid="corporate-demo-badge"]').text()).toContain('非业务数据');
     expect(wrapper.find('[data-testid="corporate-ranking-row"]').text()).toContain('西安分行');
     expect(wrapper.find('[data-testid="corporate-scope-note"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="corporate-global-trend-scope"]').exists()).toBe(false);
-    expect(wrapper.get('[data-testid="corporate-attention"]').find('p.corporate-panel__note').exists()).toBe(false);
+    expect(wrapper.findAll('[data-testid="corporate-quality-kpi"]')).toHaveLength(3);
   });
 
   it('排名可切换存款、净增和完成率，负数仍可排序', async () => {
@@ -94,7 +94,7 @@ describe('CorporateDashboard 对公经营总览', () => {
     expect(wrapper.findAll('[data-testid="corporate-ranking-row"]')[0].text()).toContain('甲');
   });
 
-  it('事项详情和机构目录使用原生键盘焦点、Escape 与背景滚动锁', async () => {
+  it('机构目录使用原生键盘焦点、Escape 与背景滚动锁', async () => {
     const { default: CorporateDashboard } = await import('../CorporateDashboard.vue');
     const wrapper = mount(CorporateDashboard, {
       attachTo: document.body,
@@ -102,25 +102,11 @@ describe('CorporateDashboard 对公经营总览', () => {
         demo: true,
         model: {
           scopeLabel: '全辖（示例）', dataDate: '2026-09-08',
-          attention: [{ label: '重点项目', count: 0, owner: null, deadline: null }],
           institutions: [{ orgCode: 'A', name: '甲支行', cityCode: '610100', cityName: '西安市', located: false }],
           rankings: [{ orgCode: 'A', name: '甲支行', deposit: 1, increase: 0, rate: 80, nplRate: null }]
         }
       }
     });
-    const attentionRow = wrapper.get('[data-testid="corporate-attention-row"]');
-    await attentionRow.trigger('click');
-    await wrapper.vm.$nextTick();
-    expect(wrapper.get('[data-testid="corporate-attention-detail"]')).toBeTruthy();
-    expect(document.body.style.overflow).toBe('hidden');
-    const attentionDialog = wrapper.get('[data-testid="corporate-attention-detail"] .corporate-attention-dialog');
-    await attentionDialog.trigger('keydown', { key: 'Tab', shiftKey: true });
-    expect(document.activeElement).toBe(wrapper.findAll('[data-action="close-corporate-attention"]').at(-1).element);
-    await wrapper.get('[data-action="close-corporate-attention"]').trigger('click');
-    await wrapper.vm.$nextTick();
-    expect(wrapper.find('[data-testid="corporate-attention-detail"]').exists()).toBe(false);
-    expect(document.body.style.overflow).toBe('');
-
     await wrapper.get('[data-action="open-corporate-directory"]').trigger('click');
     await wrapper.vm.$nextTick();
     expect(document.activeElement).toBe(wrapper.get('[data-testid="corporate-directory-search"]').element);
@@ -164,8 +150,8 @@ describe('CorporateDashboard 对公经营总览', () => {
     });
     expect(wrapper.find('[data-testid="corporate-leadership-insights"]').exists()).toBe(false);
     expect(wrapper.get('.corporate-target-panel').text()).toContain('对公存款');
-    expect(wrapper.get('[data-testid="corporate-attention"]').text()).toContain('甲机构待跟进任务');
-    expect(wrapper.get('[data-testid="corporate-attention"]').text()).toContain('2');
+    expect(wrapper.get('[data-testid="corporate-quality"]').text()).toContain('经营规模与质量');
+    expect(wrapper.findAll('[data-testid="corporate-quality-kpi"]')).toHaveLength(3);
     wrapper.unmount();
   });
 
@@ -216,27 +202,26 @@ describe('CorporateDashboard 对公经营总览', () => {
         model: { rankings: [{ orgCode: 'A', name: '甲', deposit: 100, increase: null, rate: null }] }
       }
     });
-    expect(wrapper.get('[data-testid="corporate-ranking-title"]').text()).toContain('数值对照');
+    expect(wrapper.get('[data-testid="corporate-ranking-title"]').text()).toBe('机构经营对照');
     expect(wrapper.text()).not.toContain('混合层级测试');
     expect(wrapper.text()).not.toContain('按数值排序');
     expect(wrapper.find('.corporate-ranking-matrix-note').exists()).toBe(false);
     expect(wrapper.find('[data-ranking-order="leading"]').exists()).toBe(false);
     expect(wrapper.get('[data-ranking-metric="increase"]').element.disabled).toBe(true);
-    expect(wrapper.get('[data-testid="corporate-ranking-row"] .corporate-ranking-row__number').text()).toBe('·');
+    expect(wrapper.get('[data-testid="corporate-ranking-row"] .corporate-ranking-row__name').text()).toContain('甲');
     wrapper.unmount();
   });
 
-  it('对公协调来源未接入时明确显示未接入，不把空数组误报为0项', async () => {
+  it('经营质量来源缺失时显示空值，不把空数组误报为0项', async () => {
     const { default: CorporateDashboard } = await import('../CorporateDashboard.vue');
     const wrapper = mount(CorporateDashboard, {
       props: {
-        sourcePresentation: { sourceAvailability: { corpAttention: { status: 'NO_SOURCE', message: '对公协调来源尚未绑定' } } },
-        model: { attention: [] }
+        model: { kpis: [] }
       }
     });
     expect(wrapper.find('[data-testid="corporate-leadership-insights"]').exists()).toBe(false);
-    expect(wrapper.get('[data-testid="corporate-attention"]').text()).toContain('未接入');
-    expect(wrapper.get('[data-testid="corporate-attention"]').text()).toContain('尚未绑定');
+    expect(wrapper.get('[data-testid="corporate-quality"]').text()).toContain('经营规模与质量');
+    expect(wrapper.findAll('[data-testid="corporate-quality-kpi"]')).toHaveLength(3);
     wrapper.unmount();
   });
 });

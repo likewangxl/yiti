@@ -135,21 +135,16 @@
           />
         </article>
 
-        <article class="corporate-panel corporate-attention-panel" data-testid="corporate-attention">
+        <article class="corporate-panel corporate-quality-panel" data-testid="corporate-quality">
           <header class="corporate-panel__heading">
-            <div><span class="corporate-kicker">经营协调</span><h2>需要协调的事项</h2></div>
-            <span>{{ attentionSourceUnavailable ? '未接入' : safeModel.attention.length ? `${safeModel.attention.length} 条` : '暂无数据' }}</span>
+            <div><span class="corporate-kicker">经营质量</span><h2>经营规模与质量</h2></div>
+            <span>{{ displayDate }}</span>
           </header>
-          <ul v-if="!attentionSourceUnavailable && safeModel.attention.length" class="corporate-attention-list corporate-scroll-region" tabindex="0" aria-label="对公经营关注事项">
-            <li v-for="(item, index) in safeModel.attention" :key="`${item.label || 'attention'}-${index}`">
-              <button type="button" class="corporate-attention-row" data-testid="corporate-attention-row" :aria-label="`查看事项详情：${item.label || '—'}`" @click="openAttention(item, $event)">
-                <span class="corporate-attention-list__mark" aria-hidden="true">!</span>
-                <span class="corporate-attention-list__main"><strong>{{ item.label || '—' }}</strong><small>责任 {{ item.owner || '未提供' }} · 期限 {{ item.deadline || '未提供' }}</small></span>
-                <b>{{ formatCount(item.count) }}</b><span class="corporate-attention-row__arrow" aria-hidden="true">›</span>
-              </button>
-            </li>
-          </ul>
-          <div v-else class="corporate-empty">{{ attentionSourceUnavailable ? attentionSourceMessage : '暂无来源已确认事项' }}</div>
+          <div class="corporate-quality-list" role="list" aria-label="对公经营规模与质量指标">
+            <div v-for="kpi in qualityKpis" :key="kpi.key" class="corporate-quality-kpi" data-testid="corporate-quality-kpi" :data-kpi-key="kpi.key" role="listitem">
+              <span :title="kpi.label">{{ kpi.label }}</span><strong :class="{ 'is-empty': !hasValue(kpi.value) }">{{ displayKpi(kpi).text }}</strong><small>{{ displayKpi(kpi).unit }}</small>
+            </div>
+          </div>
         </article>
       </div>
 
@@ -199,18 +194,17 @@
         />
         <article v-else class="corporate-panel corporate-ranking-panel">
           <header class="corporate-panel__heading">
-            <div><span class="corporate-kicker">{{ rankingPartial ? '机构数值对照' : '机构贡献 / 短板' }}</span><h2 data-testid="corporate-ranking-title">{{ rankingMetricInfo.label }}{{ rankingPartial ? '数值对照' : '排名' }}</h2></div>
+            <div><span class="corporate-kicker">机构对照</span><h2 data-testid="corporate-ranking-title">机构经营对照</h2></div>
           </header>
           <div class="corporate-ranking-toolbar">
             <div class="corporate-segmented" role="group" aria-label="对公机构排名指标"><button v-for="option in rankingMetricOptions" :key="option.key" type="button" :data-ranking-metric="option.key" :disabled="rankingMetricUnavailable(option.key)" :title="rankingMetricUnavailable(option.key) ? rankingMetricStatus(option.key).message : ''" :class="{ active: rankingMetric === option.key }" @click="rankingMetric = option.key">{{ option.label }}</button></div>
             <div v-if="rankingBusinessOrderEnabled" class="corporate-segmented corporate-segmented--order" role="group" aria-label="排名顺序"><button type="button" data-ranking-order="leading" :class="{ active: rankingOrder === 'leading' }" @click="rankingOrder = 'leading'">领先</button><button type="button" data-ranking-order="lagging" :class="{ active: rankingOrder === 'lagging' }" @click="rankingOrder = 'lagging'">短板</button></div>
-            <span class="corporate-ranking-unit" data-testid="corporate-ranking-unit">单位：{{ rankingMetricInfo.unit }}</span>
           </div>
           <p v-if="rankingMetricUnavailable(rankingMetric)" class="corporate-ranking-source-status" data-testid="corporate-ranking-source-status">{{ rankingMetricStatus(rankingMetric).message }}</p>
-          <div v-if="filteredRankings.length" class="corporate-ranking-matrix-head" data-testid="corporate-ranking-matrix-head" aria-hidden="true"><span></span><span>机构</span><span>当前排序值<small>{{ rankingMetricInfo.label }} · {{ rankingMetricInfo.unit }}</small></span><span>存款<small>亿元</small></span><span>净增<small>亿元</small></span><span>完成率<small>%</small></span><span>不良率<small>%</small></span></div>
+          <div v-if="filteredRankings.length" class="corporate-ranking-matrix-head" data-testid="corporate-ranking-matrix-head" aria-hidden="true"><span>机构</span><span>{{ rankingMetricInfo.label }}<small>{{ rankingMetricInfo.unit }}</small></span><span>{{ rankingSupplementInfo.label }}<small>{{ rankingSupplementInfo.unit }}</small></span></div>
             <ol v-if="filteredRankings.length" class="corporate-ranking-list corporate-scroll-region" tabindex="0" aria-label="对公机构排名列表">
               <li v-for="(item, index) in filteredRankings" :key="item.orgCode || `${item.name}-${index}`" class="corporate-ranking-row" :aria-current="selectedInstitution?.orgCode === item.orgCode ? 'true' : undefined" data-testid="corporate-ranking-row" :data-org-code="item.orgCode || ''" tabindex="0" @click="openInstitution(item)" @keydown.enter="openInstitution(item)" @keydown.space.prevent="openInstitution(item)">
-                <span class="corporate-ranking-row__number">{{ rankingPartial ? '·' : (rankingRank(item) ?? '—') }}</span><span class="corporate-ranking-row__name">{{ item.name || item.orgName || '—' }}</span><strong class="corporate-ranking-row__sort-value"><span>{{ formatRankingValue(item) }}</span><i class="corporate-ranking-row__bar" :class="{ 'is-negative': rankingValue(item) !== null && rankingValue(item) < 0 }" :style="rankingBarStyle(item)" aria-hidden="true"></i></strong><span class="corporate-ranking-row__metric" data-testid="corporate-ranking-matrix">{{ formatMatrixValue(item.deposit, '亿元', 'deposit') }}</span><span class="corporate-ranking-row__metric">{{ formatMatrixValue(item.increase, '亿元', 'increase') }}</span><span class="corporate-ranking-row__metric">{{ formatMatrixValue(item.rate, '%', 'rate') }}</span><span class="corporate-ranking-row__metric">{{ formatMatrixValue(item.nplRate, '%', 'nplRate') }}</span>
+                <span class="corporate-ranking-row__name">{{ rankingPartial ? '' : `${rankingRank(item) ?? '—'} · ` }}{{ item.name || item.orgName || '—' }}</span><strong class="corporate-ranking-row__sort-value"><span>{{ formatRankingValue(item) }}</span></strong><span class="corporate-ranking-row__metric" data-testid="corporate-ranking-matrix">{{ formatMatrixValue(rankingSupplementValue(item), rankingSupplementInfo.unit, rankingSupplementInfo.key) }}</span>
               </li>
             </ol>
           <div v-else class="corporate-empty">暂无机构排名绑定</div>
@@ -231,14 +225,6 @@
       </div>
     </section>
     </template>
-
-    <div v-if="selectedAttention" class="corporate-attention-dialog-backdrop" data-testid="corporate-attention-detail" role="dialog" aria-modal="true" aria-label="对公经营事项详情" @click.self="closeAttention">
-      <section ref="attentionDialogRef" class="corporate-attention-dialog" tabindex="-1" @keydown="onAttentionKeydown">
-        <header><div><span class="corporate-kicker">经营协调事项</span><h2>{{ selectedAttention.label || '—' }}</h2></div><button type="button" data-action="close-corporate-attention" aria-label="关闭事项详情" @click="closeAttention">×</button></header>
-        <div class="corporate-attention-dialog__body"><div class="corporate-attention-dialog__demo" v-if="demo">本地演示 · 非业务数据</div><dl><div><dt>数量</dt><dd data-testid="corporate-attention-detail-count">{{ formatCount(selectedAttention.count) }}</dd></div><div><dt>责任</dt><dd>{{ selectedAttention.owner || '未提供' }}</dd></div><div><dt>期限</dt><dd>{{ selectedAttention.deadline || '未提供' }}</dd></div><div><dt>授权范围</dt><dd>{{ safeModel.scopeLabel }}</dd></div><div><dt>数据日期</dt><dd>{{ displayDate }}</dd></div></dl><div class="corporate-attention-description"><h3>事项说明</h3><p>{{ selectedAttention.detail?.description || '未提供事项说明' }}</p><h3>协调要求</h3><p>{{ selectedAttention.detail?.coordination || '未提供协调要求' }}</p><small>来源：{{ selectedAttention.detail?.source || '未提供' }}</small></div></div>
-        <footer><button type="button" data-action="close-corporate-attention" @click="closeAttention">关闭</button></footer>
-      </section>
-    </div>
 
     <div v-if="directoryOpen" class="corporate-directory-backdrop" data-testid="corporate-directory-dialog" role="dialog" aria-modal="true" aria-label="对公机构目录" @click.self="closeDirectory">
       <section ref="directoryDialogRef" class="corporate-directory-dialog" tabindex="-1" @keydown="onDirectoryKeydown">
@@ -318,12 +304,9 @@ const selectedCityName = ref('');
 const directoryOpen = ref(false);
 const directorySearch = ref('');
 const selectedInstitution = ref(null);
-const selectedAttention = ref(null);
 const rootRef = ref(null);
-const attentionDialogRef = ref(null);
 const directoryDialogRef = ref(null);
 const directorySearchRef = ref(null);
-const focusBeforeAttention = ref(null);
 const focusBeforeDirectory = ref(null);
 
 function rankingMetricStatus(metric) {
@@ -339,18 +322,11 @@ const rankingPartial = computed(() => String(
   props.sourcePresentation?.sourceAvailability?.corpRanking?.message || ''
 ).includes('混合层级'));
 const rankingBusinessOrderEnabled = computed(() => !rankingPartial.value);
-const attentionSourceEntry = computed(() => props.sourcePresentation?.sourceAvailability?.corpAttention || null);
-const attentionSourceUnavailable = computed(() => {
-  const status = String(attentionSourceEntry.value?.status || '').toUpperCase();
-  return !Array.isArray(props.model?.attention) || ['NO_SOURCE', 'NO_ROWS', 'NO_VALUES', 'NO_COMPLETE_BATCH'].includes(status);
-});
-const attentionSourceMessage = computed(() => attentionSourceEntry.value?.message || '对公经营关注来源未接入');
-
 const safeModel = computed(() => {
   const source = props.model && typeof props.model === 'object' ? props.model : {};
   return {
-    title: '', scopeLabel: '当前大屏授权范围', dataDate: '', kpis: [], trend: [], segments: [], rankings: [], attention: [], targets: [], institutions: [], issues: [], citySummaries: {}, ...source,
-    kpis: Array.isArray(source.kpis) ? source.kpis : [], trend: Array.isArray(source.trend) ? source.trend : [], segments: Array.isArray(source.segments) ? source.segments : [], rankings: Array.isArray(source.rankings) ? source.rankings : [], attention: Array.isArray(source.attention) ? source.attention : [], targets: Array.isArray(source.targets) ? source.targets : [], institutions: Array.isArray(source.institutions) ? source.institutions : [], issues: Array.isArray(source.issues) ? source.issues : [], citySummaries: source.citySummaries && typeof source.citySummaries === 'object' ? source.citySummaries : {}
+    title: '', scopeLabel: '当前大屏授权范围', dataDate: '', kpis: [], trend: [], segments: [], rankings: [], targets: [], institutions: [], issues: [], citySummaries: {}, ...source,
+    kpis: Array.isArray(source.kpis) ? source.kpis : [], trend: Array.isArray(source.trend) ? source.trend : [], segments: Array.isArray(source.segments) ? source.segments : [], rankings: Array.isArray(source.rankings) ? source.rankings : [], targets: Array.isArray(source.targets) ? source.targets : [], institutions: Array.isArray(source.institutions) ? source.institutions : [], issues: Array.isArray(source.issues) ? source.issues : [], citySummaries: source.citySummaries && typeof source.citySummaries === 'object' ? source.citySummaries : {}
   };
 });
 function presentationOf(source) {
@@ -409,12 +385,20 @@ const kpiCards = computed(() => KPI_DEFINITIONS.map(definition => {
   const bound = findKpi(definition.key);
   return { ...definition, ...(bound || {}), key: definition.key, label: cleanOverviewLabel(bound?.label) || definition.label, unit: bound?.unit || definition.unit, value: bound?.value ?? null, change: bound?.change ?? null };
 }));
+const qualityKpis = computed(() => ['corpLoan', 'corpNplRate', 'corpRevenue'].map(key => {
+  const item = findKpi(key) || { key, value: null, unit: key === 'corpNplRate' ? '%' : '亿元' };
+  return { ...item, key, label: cleanOverviewLabel(item.label) || KPI_DEFINITIONS.find(definition => definition.key === key)?.label || key };
+}));
 const depositKpi = computed(() => findKpi('corpDeposit') || { key: 'corpDeposit', label: '对公存款余额', unit: '亿元', value: null, change: null });
 const depositAverage = computed(() => findKpi('corpDepositAverage') || { key: 'corpDepositAverage', label: '对公存款月日均', unit: '亿元', value: null, change: null });
 const displayDate = computed(() => safeModel.value.dataDate || '—');
 const provinceGeoJson = provinceGeo || null;
 const today = computed(() => { const now = new Date(); return `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')}`; });
 const rankingMetricInfo = computed(() => rankingMetricOptions.find(item => item.key === rankingMetric.value) || rankingMetricOptions[0]);
+const rankingSupplementInfo = computed(() => rankingMetric.value === 'deposit'
+  ? { key: 'increase', label: '较上期净增', unit: '亿元' }
+  : { key: 'deposit', label: '对公存款', unit: '亿元' });
+function rankingSupplementValue(item) { return item?.[rankingSupplementInfo.value.key]; }
 const activeMapMetricKey = computed(() => selectedMapMetricKey.value
   || institutionRankingModel.value.activeMetricKey
   || String(mapComponent.value?.content?.mainField || '').trim());
@@ -528,18 +512,15 @@ function openInstitution(item) { const code = String(item?.orgCode || '').trim()
 function openInstitutionFromMap(orgCode) { openInstitution({ orgCode: String(orgCode || '') }); }
 function selectInstitution(institution) { selectedInstitution.value = institution; emit('branch-select', institution.orgCode); }
 function lockBodyScroll() { document.body.style.overflow = 'hidden'; }
-function unlockBodyScroll() { if (!selectedAttention.value && !directoryOpen.value) document.body.style.overflow = ''; }
+function unlockBodyScroll() { if (!directoryOpen.value) document.body.style.overflow = ''; }
 function openDirectory() { focusBeforeDirectory.value = document.activeElement; directoryOpen.value = true; lockBodyScroll(); nextTick(() => directorySearchRef.value?.focus?.()); }
 function closeDirectory({ restoreFocus = true } = {}) { if (!directoryOpen.value) return; directoryOpen.value = false; unlockBodyScroll(); const target = focusBeforeDirectory.value; focusBeforeDirectory.value = null; if (restoreFocus) nextTick(() => target?.focus?.()); }
-function openAttention(item, event) { focusBeforeAttention.value = event?.currentTarget || document.activeElement; selectedAttention.value = item || null; lockBodyScroll(); nextTick(() => attentionDialogRef.value?.focus?.()); }
-function closeAttention({ restoreFocus = true } = {}) { if (!selectedAttention.value) return; selectedAttention.value = null; unlockBodyScroll(); const target = focusBeforeAttention.value; focusBeforeAttention.value = null; if (restoreFocus) nextTick(() => target?.focus?.()); }
-function closeOverlays() { if (selectedAttention.value) closeAttention(); else if (directoryOpen.value) closeDirectory(); }
+function closeOverlays() { if (directoryOpen.value) closeDirectory(); }
 function focusablesIn(container) { return container ? [...container.querySelectorAll('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])')] : []; }
 function trapTab(event, container) { if (event.key !== 'Tab') return; const focusables = focusablesIn(container); if (!focusables.length) return; const first = focusables[0]; const last = focusables[focusables.length - 1]; const active = document.activeElement; const activeInside = active && container?.contains(active) && active !== container; if (event.shiftKey && (!activeInside || active === first)) { event.preventDefault(); last.focus(); } else if (!event.shiftKey && (!activeInside || active === last)) { event.preventDefault(); first.focus(); } }
 function onDirectoryKeydown(event) { if (event.key === 'Escape') { event.preventDefault(); closeDirectory(); return; } trapTab(event, directoryDialogRef.value); }
-function onAttentionKeydown(event) { if (event.key === 'Escape') { event.preventDefault(); closeAttention(); return; } trapTab(event, attentionDialogRef.value); }
 function onDocumentKeydown(event) { if (event.key === 'Escape') { event.preventDefault(); closeOverlays(); } }
-function clearTransientState() { clearCity(); directorySearch.value = ''; selectedInstitution.value = null; selectedMapMetricKey.value = ''; rankingMetric.value = 'deposit'; rankingOrder.value = 'leading'; closeAttention({ restoreFocus: false }); closeDirectory({ restoreFocus: false }); }
+function clearTransientState() { clearCity(); directorySearch.value = ''; selectedInstitution.value = null; selectedMapMetricKey.value = ''; rankingMetric.value = 'deposit'; rankingOrder.value = 'leading'; closeDirectory({ restoreFocus: false }); }
 
 function scopeSignature(model = {}) {
   const source = model && typeof model === 'object' ? model : {};
@@ -579,8 +560,8 @@ watch(() => [props.model, props.loading, props.sourcePresentation?.scopeIdentity
   }
 }, { deep: true });
 watch(() => props.error, error => { if (error) clearTransientState(); });
-watch(() => [directoryOpen.value, selectedAttention.value], ([openDirectoryState, openAttentionState]) => {
-  if (openDirectoryState || openAttentionState) document.addEventListener('keydown', onDocumentKeydown);
+watch(() => directoryOpen.value, openDirectoryState => {
+  if (openDirectoryState) document.addEventListener('keydown', onDocumentKeydown);
   else document.removeEventListener('keydown', onDocumentKeydown);
 });
 onBeforeUnmount(() => { document.removeEventListener('keydown', onDocumentKeydown); document.body.style.overflow = ''; });

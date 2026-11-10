@@ -1,7 +1,7 @@
 import { RETAIL_RUNTIME_KPI_ORDER } from './operatingRuntimeLayout.js';
 
 const LEGACY_LABELS = Object.freeze({
-  corpSegments: '重点客群信贷', corpAttention: '需要协调的事项', corpRanking: '对公机构排名 / 数值对照', corpTargets: '对公经营目标',
+  corpSegments: '重点客群信贷', corpRanking: '机构经营对照', corpTargets: '对公经营目标',
   retailSegments: '客户分层', retailAttention: '经营事项与数据核验', retailRanking: '机构存款对比', retailTargets: '零售经营目标',
   corpTrend: '对公存贷款趋势', retailTrend: '零售存款余额与月日均趋势', branches: '陕西省机构分布'
 });
@@ -9,7 +9,7 @@ const LEGACY_LABELS = Object.freeze({
 const LEGACY_LAYOUTS = Object.freeze({
   'corporate-overview-v1': {
     top: ['corpDeposit', 'corpDepositAverage', 'corpLoan', 'corpRevenue', 'corpCustomers', 'corpNplRate'],
-    left: ['corpDeposit', 'corpDepositAverage', 'corpSegments', 'corpAttention'], center: ['branches', 'corpTrend'], right: ['corpRanking', 'corpTargets']
+    left: ['corpDeposit', 'corpDepositAverage', 'corpSegments', 'corpLoan', 'corpNplRate', 'corpRevenue'], center: ['branches', 'corpTrend'], right: ['corpRanking', 'corpTargets']
   },
   'retail-overview-v1': {
     top: RETAIL_RUNTIME_KPI_ORDER,

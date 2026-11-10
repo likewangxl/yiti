@@ -51,6 +51,7 @@ const CITY_KEYS = Object.freeze({
 });
 function selectorsFor(entry, template, context, schema) {
   const key = String(entry.key || entry.slot || '');
+  if (template === 'corporate-overview-v1' && !schema && !context && key === 'corpAttention') return [null];
   if (context === 'city') {
     if (key === 'city-branch-ranking') return ['.city-list-panel'];
     if (key === 'city-institution-map') return ['.city-map-panel'];
@@ -72,6 +73,9 @@ function selectorsFor(entry, template, context, schema) {
     retailDeposit: 'retail-deposit-balance', retailDepositAverage: 'retail-deposit-average'
   };
   if (shared[key]) return [LEGACY_TARGETS[key], attribute('data-testid', shared[key])];
+  if (template === 'corporate-overview-v1' && ['corpLoan', 'corpNplRate', 'corpRevenue'].includes(key)) {
+    return [LEGACY_TARGETS[key], `${attribute('data-testid', 'corporate-quality-kpi')}${attribute('data-kpi-key', key)}`];
+  }
   if (['retailLoan','retailNplRate'].includes(key)) return [LEGACY_TARGETS[key], attribute('data-credit-key',key)];
   return [LEGACY_TARGETS[key] || null];
 }

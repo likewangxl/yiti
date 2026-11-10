@@ -8,7 +8,7 @@ describe('非 schema1 对公/零售 legacy 组件目录', () => {
     expect(entries.find(item=>item.key==='branches')).toMatchObject({kind:'INSTITUTION_MAP',readOnly:true,titleEditable:false});
     expect(entries.map(item => item.slot)).toEqual([
       'corpDeposit', 'corpDepositAverage', 'corpLoan', 'corpRevenue', 'corpCustomers', 'corpNplRate',
-      'corpTrend', 'corpSegments', 'corpRanking', 'corpAttention', 'corpTargets', 'branches'
+      'corpTrend', 'corpSegments', 'corpRanking', 'corpTargets', 'branches'
     ]);
     expect(entries.find(item => item.slot === 'corpDeposit')).toMatchObject({ fieldSemantics: ['value', 'change', 'date'] });
     expect(entries.find(item => item.slot === 'corpTrend')).toMatchObject({
@@ -16,7 +16,7 @@ describe('非 schema1 对公/零售 legacy 组件目录', () => {
     });
     expect(entries.find(item => item.slot === 'corpRanking')).toMatchObject({
       fieldSemantics: ['orgCode', 'name', 'deposit', 'increase', 'rate', 'nplRate'],
-      label: '对公机构排名 / 数值对照'
+      label: '机构经营对照'
     });
     expect(entries.find(item => item.slot === 'corpRanking').derivedNotes).toContain('排名展示取决于机构层级与数据完整性，数据不完整时仅作数值对照');
     expect(entries.find(item => item.slot === 'corpSegments').derivedNotes).toContain('户均贷款由客群贷款与客户数派生，仅展示不可绑定');
