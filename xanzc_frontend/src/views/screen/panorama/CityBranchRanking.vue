@@ -14,9 +14,13 @@
     <label class="city-branch-ranking__search">搜索支行<input data-testid="branch-search" :value="search" type="search" placeholder="搜索支行名称" @input="emit('search-change', $event.target.value)" /></label>
     <div v-if="pageRows.length" class="city-branch-ranking__list" role="list">
       <button v-for="row in pageRows" :key="row.orgCode" type="button" class="city-branch-ranking__row city-branch-row" data-testid="branch-row" data-ranking-row="city-branch-ranking-row" :data-org-code="row.orgCode" :data-missing="row.missing ? 'true' : undefined" @click="emit('branch-select', row.orgCode)">
-        <span class="city-branch-ranking__rank">{{ row.rank }}</span><span class="city-branch-ranking__name">{{ row.orgName }}</span>
+        <span class="city-branch-ranking__rank">{{ row.rank }}</span><span class="city-branch-ranking__name" :title="row.orgName">{{ row.orgName }}</span>
         <template v-if="!row.missing"><span class="city-branch-ranking__track" role="progressbar" :aria-label="`${row.orgName} ${tabLabel}`" :aria-valuenow="row.value" aria-valuemin="0" :aria-valuemax="barMaximum"><i :style="{ width: `${barWidth(row.value)}%` }" aria-hidden="true"></i></span><strong class="city-branch-ranking__value">{{ formatValue(row.value) }}{{ row.unit || '%' }}</strong></template>
         <template v-else><span class="city-branch-ranking__missing-value">未提供</span><strong class="city-branch-ranking__value">—</strong></template>
+        <span v-if="row.details" class="city-ranking-details" data-testid="city-ranking-details">
+          <template v-if="row.details.actual !== undefined">实际 {{ formatAmount(row.details.actual) }} 万元 · 目标 {{ formatAmount(row.details.target) }} 万元<span v-if="row.details.gap !== null"> · {{ row.details.gap >= 0 ? '超目标' : '距目标' }} {{ formatAmount(Math.abs(row.details.gap)) }} 万元</span></template>
+          <template v-else>贷款 {{ formatAmount(row.details.loan) }} 万元 · 不良本金 {{ formatAmount(row.details.npl) }} 万元</template>
+        </span>
       </button>
     </div>
     <div v-else class="city-branch-ranking__empty" data-testid="city-branch-ranking-empty">暂无该指标有效数据</div>
@@ -147,6 +151,11 @@ function formatValue(value) {
   const number = Number(value);
   return Number.isFinite(number) ? `${number.toFixed(2)}` : '—';
 }
+function formatAmount(value) {
+  if (value === null || value === undefined || value === '') return '—';
+  const number = Number(value);
+  return Number.isFinite(number) ? new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(number) : '—';
+}
 function onVisibilityChange() { hidden.value = document.visibilityState === 'hidden'; syncTimer(); }
 watch(() => props.model?.activeTabKey, value => {
   if (value && tabs.value.some(tab => tab.key === value)) {
@@ -192,6 +201,13 @@ onBeforeUnmount(() => { document.removeEventListener('visibilitychange', onVisib
 
 <style scoped>
 .city-branch-ranking{display:flex;min-width:0;min-height:420px;height:100%;padding:12px;flex-direction:column;gap:8px;color:var(--panorama-text,#eaf2ff);background:var(--panorama-panel-deep,rgba(4,14,39,.9));border:1px solid var(--panorama-border,rgba(119,163,255,.3));border-radius:8px}.city-branch-ranking__header{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.city-branch-ranking h2{margin:0;font-size:18px}.city-branch-ranking h2 small{color:var(--panorama-text-dim,#8fa9db);font-size:11px;font-weight:400}.city-branch-ranking p{margin:3px 0 0;color:var(--panorama-text-dim,#8fa9db);font-size:11px}.city-branch-ranking__header button{padding:4px 8px;border:1px solid rgba(119,163,255,.3);border-radius:4px;color:#cfe5ff;background:#0b204b;font:inherit;font-size:11px}.city-branch-ranking__tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}.city-branch-ranking__tabs button{min-width:0;padding:5px 4px;overflow:hidden;border:1px solid rgba(119,163,255,.2);border-radius:4px;color:#9fb7df;background:rgba(13,38,86,.7);font:inherit;font-size:12px;text-overflow:ellipsis;white-space:nowrap}.city-branch-ranking__tabs button.active{border-color:#4de8ef;color:#eaf2ff;background:rgba(50,126,156,.35)}.city-branch-ranking__search{display:grid;gap:4px;color:#a9bfe3;font-size:11px}.city-branch-ranking__search input{padding:6px 8px;border:1px solid rgba(119,163,255,.28);border-radius:4px;color:#eaf2ff;background:#0b204b;font:inherit}.city-branch-ranking__list{min-height:0;overflow:auto;flex:1 1 auto}.city-branch-ranking__row{display:grid;width:100%;min-height:36px;grid-template-columns:24px minmax(72px,1.05fr) minmax(50px,1fr) 58px;align-items:center;gap:6px;padding:5px 3px;border:0;border-bottom:1px solid rgba(119,163,255,.12);color:#eaf2ff;background:transparent;text-align:left;font:inherit;cursor:pointer}.city-branch-ranking__rank{color:#ffc45e;font-size:12px}.city-branch-ranking__name{overflow:hidden;font-size:13px;text-overflow:ellipsis;white-space:nowrap}.city-branch-ranking__track{height:7px;overflow:hidden;border-radius:4px;background:rgba(119,163,255,.14)}.city-branch-ranking__track i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#4de8ef,#a979ff)}.city-branch-ranking__value{font-size:13px;text-align:right;white-space:nowrap}.city-branch-ranking__missing-value{color:#ffc45e;font-size:12px}.city-branch-ranking__empty,.city-branch-ranking__missing{padding:10px;color:#ffc45e;font-size:11px}.city-branch-ranking__missing > button{padding:4px 7px;border:1px solid rgba(255,196,94,.4);border-radius:4px;color:#ffd98d;background:rgba(89,58,10,.55);font:inherit;font-size:11px}.city-branch-ranking__missing-list{display:grid;gap:3px;margin-top:6px}.city-branch-ranking__missing-row{display:flex;justify-content:space-between;gap:8px;padding:4px 7px;border:1px solid rgba(255,196,94,.2);border-radius:4px;color:#eaf2ff;background:rgba(14,32,70,.75);font:inherit;font-size:11px;text-align:left}.city-branch-ranking__missing-row span{color:#ffc45e}.city-branch-ranking__pagination{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex:0 0 auto;color:#9fb7df;font-size:11px}.city-branch-ranking__pagination button{min-width:24px;padding:4px;border:1px solid rgba(119,163,255,.28);border-radius:4px;color:#cfe5ff;background:#0b204b}.city-branch-ranking__pagination button:disabled{opacity:.4}
+</style>
+
+<style scoped>
+.city-branch-ranking .city-branch-ranking__list { align-content: start; grid-auto-rows: max-content; }
+.city-branch-ranking .city-branch-ranking__row { min-height: 64px; grid-template-rows: 24px 18px; padding: 8px 3px; row-gap: 4px; }
+.city-branch-ranking .city-branch-ranking__row > .city-ranking-details { grid-column: 2 / -1; overflow: hidden; color: #a9bfdf; font-size: 12px; line-height: 18px; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.city-branch-ranking .city-branch-ranking__track { align-self: center; height: 5px; }
 </style>
 
 <style scoped>

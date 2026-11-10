@@ -12,6 +12,7 @@ export const CITY_BRANCH_RANKING_TABS = Object.freeze(TAB_DEFINITIONS.map(([key,
 })));
 
 const PERCENT_UNITS = new Set(['PERCENT', 'RATIO', '%', '百分比', '比例']);
+const AMOUNT_SCALES = Object.freeze({ YUAN: 1e-4, TEN_THOUSAND: 1, HUNDRED_MILLION: 1e4 });
 
 function object(value) { return value !== null && typeof value === 'object' && !Array.isArray(value); }
 function text(value) { return value === null || value === undefined ? '' : String(value).trim(); }
@@ -59,6 +60,13 @@ function normalizeValue(node, kind) {
   if (node.unit && !PERCENT_UNITS.has(unit)) return null;
   if (unit === 'RATIO') return value * 100;
   return value;
+}
+function amountInTenThousand(node) {
+  const value = finite(node?.value);
+  if (value === null) return null;
+  const unit = canonicalUnit(node.unit);
+  const scale = AMOUNT_SCALES[unit];
+  return scale === undefined ? null : value * scale;
 }
 function fieldsFor(tab) { return tab.fields || [tab.key]; }
 function presentationOf(source) {
@@ -113,6 +121,48 @@ function readBranchValue(branch, tab, source) {
   const block = blockMetricForOrg({ ...source, orgCode: orgCodeOf(branch), tab });
   return normalizeValue(block, tab.kind);
 }
+function rawMetricForOrg(branch, fields, source) {
+  const direct = metricNode(branch?.metrics, fields);
+  if (direct.present) return direct;
+  if (!object(source.blockResults)) return null;
+  const matches = [];
+  for (const blockId of source.blockIds) {
+    const block = source.blockResults[blockId] ?? source.blockResults[String(blockId)];
+    const rows = blockRows(block).filter(row => orgCodeOf(row) === orgCodeOf(branch));
+    if (rows.length > 1) {
+      if (rows.some(row => metricNode(row, fields).present)) return null;
+      continue;
+    }
+    if (rows.length !== 1) continue;
+    const node = metricNode(rows[0], fields);
+    if (node.present) matches.push({ ...node, unit: node.unit || block?.unitByField?.[node.field] || block?.unit || '' });
+  }
+  if (!matches.length) return null;
+  const normalized = matches.map(amountInTenThousand);
+  return normalized.every(value => value === normalized[0]) ? matches[0] : null;
+}
+function detailFields(tabKey) {
+  if (tabKey === 'retailDepositRate') return { actual: ['retailDeposit', '直营零售存款', '直营零售存款余额', '测试_零售存款余额'], target: ['retailDepositTarget', '零售存款目标值', '测试_零售存款目标值'] };
+  if (tabKey === 'retailLoanRate') return { actual: ['retailLoan', '直营零售贷款'], target: ['retailLoanTarget', '零售贷款目标值'] };
+  if (tabKey === 'corpDepositRate') return { actual: ['corpDeposit', '直营对公存款'], target: ['corpDepositTarget', '对公存款目标值'] };
+  if (tabKey === 'corpLoanRate') return { actual: ['corpLoan', '直营对公贷款'], target: ['corpLoanTarget', '对公贷款目标值'] };
+  if (tabKey === 'retailNplRate') return { loan: ['retailLoan', '直营零售贷款'], npl: ['retailNplBalance', '零售不良贷款本金'] };
+  if (tabKey === 'corpNplRate') return { loan: ['corpLoan', '直营对公贷款'], npl: ['corpNplBalance', '对公不良贷款本金'] };
+  return null;
+}
+function rowDetails(branch, tab, source) {
+  const fields = detailFields(tab.key);
+  if (!fields) return null;
+  const result = {};
+  for (const [key, aliases] of Object.entries(fields)) {
+    const node = rawMetricForOrg(branch, aliases, source);
+    const value = amountInTenThousand(node);
+    result[key] = value;
+  }
+  if ('actual' in result) result.gap = result.actual !== null && result.target !== null && result.target > 0
+    ? Math.round((result.actual - result.target) * 100) / 100 : null;
+  return Object.values(result).some(value => value !== null) ? result : null;
+}
 function comparisonRank(left, right, direction) {
   const diff = direction === 'ASC' ? left.value - right.value : right.value - left.value;
   if (diff !== 0) return diff;
@@ -135,7 +185,7 @@ export function buildCityBranchRankingModel(input = {}) {
   const missingRows = [];
   branches.forEach(branch => {
     const value = readBranchValue(branch, tab, source);
-    const row = { orgCode: orgCodeOf(branch), orgName: text(branch.orgName ?? branch.org_name) || orgCodeOf(branch), value, unit: '%' };
+    const row = { orgCode: orgCodeOf(branch), orgName: text(branch.orgName ?? branch.org_name) || orgCodeOf(branch), value, unit: '%', details: rowDetails(branch, tab, source) };
     if (value === null) missingRows.push(row);
     else rows.push(row);
   });

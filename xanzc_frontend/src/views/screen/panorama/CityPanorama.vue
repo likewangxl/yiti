@@ -447,8 +447,8 @@ watch([search, attentionOnly, sortDescending, page, selectedOrgCode, rankingTabK
   }
   .city-panorama .city-list-panel :deep(.city-branch-ranking__list) {
     display: grid;
-    grid-auto-rows: minmax(36px, 1fr);
-    align-content: stretch;
+    grid-auto-rows: max-content;
+    align-content: start;
   }
 }
 

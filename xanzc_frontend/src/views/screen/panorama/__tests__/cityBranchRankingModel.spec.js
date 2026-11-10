@@ -25,6 +25,28 @@ const institutions = [
 ];
 
 describe('cityBranchRankingModel', () => {
+  it('缺少目标时仍展示有明确单位的余额，未知目标不推算差额', () => {
+    const result = buildCityBranchRankingModel({ cityCode: '610100', institutions: [{ orgCode: 'A', cityCode: '610100', metrics: { retailDepositRate: 80 } }],
+      blockResults: { 60: { rows: [{ org_code: 'A', retailDeposit: 123400 }], unitByField: { retailDeposit: 'YUAN' } } } });
+    expect(result.rows[0].details).toEqual({ actual: 12.34, target: null, gap: null });
+  });
+  it('完成率行输出万元实际/目标/差额明细，缺目标仍保留实际', () => {
+    const result = buildCityBranchRankingModel({ cityCode: '610100', activeTabKey: 'retailDepositRate',
+      institutions: [{ orgCode: 'A', orgName: '甲支行', cityCode: '610100' }],
+      sourcePresentation: { display: { components: [{ dataRefs: [{ blockId: 31 }] }] } },
+      blockResults: { 31: { rows: [{ org_code: 'A', retailDepositRate: 90, retailDeposit: 123400, retailDepositTarget: 130000 }], unitByField: { retailDeposit: 'YUAN', retailDepositTarget: 'YUAN' } } }
+    });
+    expect(result.rows[0].details).toMatchObject({ actual: 12.34, target: 13, gap: -0.66 });
+  });
+
+  it('重复机构行或金额单位冲突时不生成明细，旧测试别名仍可读取', () => {
+    const base = { cityCode: '610100', activeTabKey: 'retailDepositRate', institutions: [{ orgCode: 'A', cityCode: '610100' }], sourcePresentation: { display: { components: [{ dataRefs: [{ blockId: 31 }] }] } } };
+    const duplicate = buildCityBranchRankingModel({ ...base, blockResults: { 31: { rows: [{ org_code: 'A', retailDeposit: 1, retailDepositRate: 80 }, { org_code: 'A', retailDeposit: 2, retailDepositRate: 80 }], unitByField: { retailDeposit: 'YUAN' } } } });
+    expect(duplicate.rows[0]).toBeUndefined();
+    expect(duplicate.missingRows[0].orgCode).toBe('A');
+    const alias = buildCityBranchRankingModel({ ...base, blockResults: { 31: { rows: [{ org_code: 'A', '测试_零售存款目标完成率': 80, '测试_零售存款余额': 1000, '测试_零售存款目标值': 2000 }], unitByField: { '测试_零售存款余额': 'YUAN', '测试_零售存款目标值': 'YUAN' } } } });
+    expect(alias.rows[0].details).toMatchObject({ actual: 0.1, target: 0.2 });
+  });
   it('固定六个 tab 顺序，完成率降序、不良率按实际率升序，同分并列', () => {
     expect(tabs.map(tab => tab.key)).toEqual([
       'retailDepositRate', 'retailLoanRate', 'retailNplRate',

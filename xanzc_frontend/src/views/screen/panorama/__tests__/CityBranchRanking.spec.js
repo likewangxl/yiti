@@ -15,6 +15,12 @@ const model = {
 };
 
 describe('CityBranchRanking', () => {
+  it('缺失目标显示破折号，不把 null 格式化成零', () => {
+    const wrapper = mount(CityBranchRanking, { props: { model: { ...model, rows: [{ ...model.rows[0], details: { actual: 12.34, target: null, gap: null } }] } } });
+    expect(wrapper.get('[data-testid="city-ranking-details"]').text()).toContain('目标 —');
+    expect(wrapper.get('[data-testid="city-ranking-details"]').text()).not.toContain('超目标');
+    wrapper.unmount();
+  });
   const mounted = [];
   const mountRanking = props => {
     const wrapper = mount(CityBranchRanking, { props });
@@ -29,6 +35,12 @@ describe('CityBranchRanking', () => {
   afterEach(() => {
     mounted.splice(0).forEach(wrapper => wrapper.unmount());
     vi.useRealTimers();
+  });
+
+  it('紧凑行显示明确的实际/目标明细，并保留机构编码', () => {
+    const wrapper = mountRanking({ model: { ...model, rows: [{ orgCode: 'ORG-1', orgName: '支行1', value: 102.61, unit: '%', rank: 1, details: { actual: 2191.89, target: 2136.13, gap: 55.76 } }] }, pageSize: 5 });
+    expect(wrapper.get('[data-testid="city-ranking-details"]').text()).toContain('实际 2,191.89 万元');
+    expect(wrapper.get('[data-testid="branch-row"]').attributes('data-org-code')).toBe('ORG-1');
   });
 
   it('每 5000ms 先轮播当前 tab 的分页，末页停留后才切换 tab', async () => {
