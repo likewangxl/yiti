@@ -41,6 +41,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -538,6 +539,164 @@ class ScreenQueryEngineTest {
         assertThat(response.getQuality().getStatus()).isEqualTo("COMPLETE");
         assertThat(response.getQuality().getSourceAsOf().get("financial")).isEqualTo("2026-07-10");
         verify(batchApi).byId("RUN-20260710-01", List.of("001", "002"));
+    }
+
+    @Test
+    void batchPolicy_pinnedBatchTakesPrecedenceAndNeverCallsLatest() {
+        BranchDashboardBatchQueryApi batchApi = mock(BranchDashboardBatchQueryApi.class);
+        BranchDashboardBatchDTO snapshot = immutableBatch("PINNED-OLD", "GROUP_CORP",
+                Map.of("M_0001", metricContract("M_0001")),
+                List.of(batchRow("001", TODAY, "M_0001", 280)));
+        when(batchApi.byId("PINNED-OLD", List.of("001"))).thenReturn(Optional.of(snapshot));
+
+        ScreenQueryEngine queryEngine = engine(null, mock(OrgApi.class));
+        queryEngine.setBatchQueryApi(batchApi);
+        ScreenDataReqDTO request = namedGroupRequest("001");
+        request.setServerGroupCode("GROUP_CORP");
+        String config = pinnedBatchConfig("PINNED-OLD", "M_0001");
+
+        ScreenDataRespDTO response = queryEngine.queryAt(datasource(config), request, TODAY, 10);
+
+        assertThat(response.getQuality().getBatchId()).isEqualTo("PINNED-OLD");
+        assertThat(response.getRows()).containsExactly(List.of("2026-07-12", BigDecimal.valueOf(280)));
+        verify(batchApi).byId("PINNED-OLD", List.of("001"));
+        verify(batchApi, never()).latest(anyString(), any());
+    }
+
+    @Test
+    void batchPolicy_pinnedBatchAllowsSameIdForHistoryDateComparison() {
+        BranchDashboardBatchQueryApi batchApi = mock(BranchDashboardBatchQueryApi.class);
+        BranchDashboardBatchDTO snapshot = BranchDashboardBatchDTO.builder()
+                .batchId("PINNED-OLD").groupCode("GROUP_CORP")
+                .dataDate(TODAY).version("V2").status("COMPLETE")
+                .memberOrgCodes(List.of("001"))
+                .quality(BranchDashboardQualityDTO.builder()
+                        .expectedSubjects(1).receivedSubjects(1).selectedComplete(true).build())
+                .metricContracts(Map.of("M_0001", metricContract("M_0001")))
+                .rows(List.of(batchRow("001", TODAY, "M_0001", 500)))
+                .historyRows(List.of(batchRow("001", LocalDate.of(2026, 7, 9), "M_0001", 480)))
+                .build();
+        when(batchApi.byId("PINNED-OLD", List.of("001"))).thenReturn(Optional.of(snapshot));
+
+        ScreenQueryEngine queryEngine = engine(null, mock(OrgApi.class));
+        queryEngine.setBatchQueryApi(batchApi);
+        ScreenDataReqDTO request = namedGroupRequest("001");
+        request.setServerGroupCode("GROUP_CORP");
+        request.setBatchId("PINNED-OLD");
+        request.setPeriod("RANGE");
+        request.setDateFrom("2026-07-09");
+        request.setDateTo("2026-07-09");
+
+        ScreenDataRespDTO response = queryEngine.queryAt(
+                datasource(pinnedBatchConfig("PINNED-OLD", "M_0001")), request, TODAY, 10);
+
+        assertThat(response.getRows()).containsExactly(List.of("2026-07-09", BigDecimal.valueOf(480)));
+        assertThat(response.getQuality().getBatchId()).isEqualTo("PINNED-OLD");
+        verify(batchApi).byId("PINNED-OLD", List.of("001"));
+        verify(batchApi, never()).latest(anyString(), any());
+    }
+
+    @Test
+    void batchPolicy_pinnedBatchRejectsClientBatchIdOverrideBeforeLookup() {
+        BranchDashboardBatchQueryApi batchApi = mock(BranchDashboardBatchQueryApi.class);
+        ScreenQueryEngine queryEngine = engine(null, mock(OrgApi.class));
+        queryEngine.setBatchQueryApi(batchApi);
+        ScreenDataReqDTO request = namedGroupRequest("001");
+        request.setServerGroupCode("GROUP_CORP");
+        request.setBatchId("CLIENT-OTHER");
+
+        assertThatThrownBy(() -> queryEngine.queryAt(
+                datasource(pinnedBatchConfig("PINNED-OLD", "M_0001")), request, TODAY, 10))
+                .isInstanceOf(BizException.class)
+                .hasFieldOrPropertyWithValue("code", "RPT-43008");
+        verifyNoInteractions(batchApi);
+    }
+
+    @Test
+    void batchPolicy_missingPinnedTargetReturnsNoCompleteWithoutLatestFallback() {
+        BranchDashboardBatchQueryApi batchApi = mock(BranchDashboardBatchQueryApi.class);
+        when(batchApi.byId("PINNED-MISSING", List.of("001"))).thenReturn(Optional.empty());
+        ScreenQueryEngine queryEngine = engine(null, mock(OrgApi.class));
+        queryEngine.setBatchQueryApi(batchApi);
+        ScreenDataReqDTO request = namedGroupRequest("001");
+        request.setServerGroupCode("GROUP_CORP");
+
+        ScreenDataRespDTO response = queryEngine.queryAt(
+                datasource(pinnedBatchConfig("PINNED-MISSING", "M_0001")), request, TODAY, 10);
+
+        assertThat(response.getRows()).isEmpty();
+        assertThat(response.getQuality().getStatus()).isEqualTo("NO_COMPLETE_BATCH");
+        verify(batchApi).byId("PINNED-MISSING", List.of("001"));
+        verify(batchApi, never()).latest(anyString(), any());
+    }
+
+    @Test
+    void batchPolicy_pinnedBatchGroupMismatchReturnsNoComplete() {
+        BranchDashboardBatchQueryApi batchApi = mock(BranchDashboardBatchQueryApi.class);
+        when(batchApi.byId("PINNED-OLD", List.of("001"))).thenReturn(Optional.of(
+                immutableBatch("PINNED-OLD", "OTHER_GROUP",
+                        Map.of("M_0001", metricContract("M_0001")),
+                        List.of(batchRow("001", TODAY, "M_0001", 280)))));
+        ScreenQueryEngine queryEngine = engine(null, mock(OrgApi.class));
+        queryEngine.setBatchQueryApi(batchApi);
+        ScreenDataReqDTO request = namedGroupRequest("001");
+        request.setServerGroupCode("GROUP_CORP");
+
+        ScreenDataRespDTO response = queryEngine.queryAt(
+                datasource(pinnedBatchConfig("PINNED-OLD", "M_0001")), request, TODAY, 10);
+
+        assertThat(response.getRows()).isEmpty();
+        assertThat(response.getQuality().getStatus()).isEqualTo("NO_COMPLETE_BATCH");
+        verify(batchApi, never()).latest(anyString(), any());
+    }
+
+    @Test
+    void batchPolicy_pinnedBatchMissingConfiguredMetricContractReturnsNoComplete() {
+        BranchDashboardBatchQueryApi batchApi = mock(BranchDashboardBatchQueryApi.class);
+        when(batchApi.byId("PINNED-OLD", List.of("001"))).thenReturn(Optional.of(
+                immutableBatch("PINNED-OLD", "GROUP_CORP",
+                        Map.of("M_0001", metricContract("M_0001")),
+                        List.of(batchRow("001", TODAY, "M_0001", 280)))));
+        ScreenQueryEngine queryEngine = engine(null, mock(OrgApi.class));
+        queryEngine.setBatchQueryApi(batchApi);
+        ScreenDataReqDTO request = namedGroupRequest("001");
+        request.setServerGroupCode("GROUP_CORP");
+
+        ScreenDataRespDTO response = queryEngine.queryAt(datasource(pinnedBatchConfig(
+                        "PINNED-OLD", "M_0001", "M_0002")), request, TODAY, 10);
+
+        assertThat(response.getRows()).isEmpty();
+        assertThat(response.getColumns()).containsExactly("data_date", "存款余额", "贷款余额");
+        assertThat(response.getQuality().getStatus()).isEqualTo("NO_COMPLETE_BATCH");
+        verify(batchApi, never()).latest(anyString(), any());
+    }
+
+    @Test
+    void batchPolicy_invalidPinnedBatchIdIsRejectedAtRuntime() {
+        BranchDashboardBatchQueryApi batchApi = mock(BranchDashboardBatchQueryApi.class);
+        ScreenQueryEngine queryEngine = engine(null, mock(OrgApi.class));
+        queryEngine.setBatchQueryApi(batchApi);
+        ScreenDataReqDTO request = namedGroupRequest("001");
+        request.setServerGroupCode("GROUP_CORP");
+        List<String> invalidBatchPolicies = List.of(
+                "\"pinnedBatchId\":null",
+                "\"pinnedBatchId\":\"\"",
+                "\"pinnedBatchId\":12",
+                "\"pinnedBatchId\":true",
+                "\"pinnedBatchId\":\" PINNED-OLD \"",
+                "\"pinnedBatchId\":\"PINNED.ID\"",
+                "\"pinnedBatchId\":\"" + "A".repeat(65) + "\"");
+
+        for (String policyField : invalidBatchPolicies) {
+            String config = "{\"scopeMode\":\"NAMED_GROUP\",\"table\":\"ORG_INDEX_RESULT\","
+                    + "\"metrics\":[{\"metricCode\":\"M_0001\",\"metricName\":\"存款余额\",\"slot\":3}],"
+                    + "\"batchPolicy\":{" + policyField + "}}";
+            assertThatThrownBy(() -> queryEngine.queryAt(datasource(config), request, TODAY, 10))
+                    .as("policy field %s", policyField)
+                    .isInstanceOf(BizException.class)
+                    .hasFieldOrPropertyWithValue("code", "RPT-43009");
+        }
+        verifyNoInteractions(batchApi);
     }
 
     @Test
@@ -1176,6 +1335,48 @@ class ScreenQueryEngineTest {
                 + "\"qualityPolicy\":{\"maxAgeDays\":" + maxAgeDays
                 + ",\"requiredComplete\":true},"
                 + "\"aggregation\":{\"groupBy\":\"NONE\",\"agg\":\"SUM\"}}";
+    }
+
+    private static String pinnedBatchConfig(String batchId, String... metricCodes) {
+        String metrics = Arrays.stream(metricCodes)
+                .map(code -> "{\"metricCode\":\"" + code + "\",\"metricName\":\""
+                        + ("M_0002".equals(code) ? "贷款余额" : "存款余额")
+                        + "\",\"slot\":" + ("M_0002".equals(code) ? 7 : 3) + "}")
+                .collect(java.util.stream.Collectors.joining(","));
+        return "{\"scopeMode\":\"NAMED_GROUP\",\"table\":\"ORG_INDEX_RESULT\","
+                + "\"metrics\":[" + metrics + "],"
+                + "\"batchPolicy\":{\"pinnedBatchId\":\"" + batchId + "\"}}";
+    }
+
+    private static BranchDashboardBatchDTO immutableBatch(
+            String batchId, String groupCode,
+            Map<String, BranchDashboardMetricContractDTO> metricContracts,
+            List<BranchDashboardBatchRowDTO> rows) {
+        return BranchDashboardBatchDTO.builder()
+                .batchId(batchId).groupCode(groupCode).dataDate(TODAY).version("V2").status("COMPLETE")
+                .memberOrgCodes(List.of("001"))
+                .quality(BranchDashboardQualityDTO.builder()
+                        .expectedSubjects(1).receivedSubjects(1).selectedComplete(true).build())
+                .metricContracts(metricContracts)
+                .rows(rows)
+                .build();
+    }
+
+    private static BranchDashboardMetricContractDTO metricContract(String metricCode) {
+        return BranchDashboardMetricContractDTO.builder()
+                .metricCode(metricCode)
+                .metricName("M_0002".equals(metricCode) ? "贷款余额" : "存款余额")
+                .unit("YUAN")
+                .build();
+    }
+
+    private static BranchDashboardBatchRowDTO batchRow(String orgCode, LocalDate dataDate,
+                                                       String metricCode, long value) {
+        return BranchDashboardBatchRowDTO.builder()
+                .orgCode(orgCode)
+                .dataDate(dataDate)
+                .metricValues(Map.of(metricCode, BigDecimal.valueOf(value)))
+                .build();
     }
 
     private static ScreenDataReqDTO namedGroupRequest(String... codes) {

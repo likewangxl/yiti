@@ -80,6 +80,9 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
     private static final Set<String> FIELD_META_AMOUNT_SCALES = Set.of(
             "YUAN", "TEN_THOUSAND_YUAN", "HUNDRED_MILLION_YUAN");
 
+    /** 固定批次 ID 作为受信配置值保存，不允许空白或非 ASCII 字符。 */
+    private static final String PINNED_BATCH_ID_PATTERN = "^[A-Za-z0-9_-]{1,64}$";
+
     /** scopeMode 枚举（spec 2026-07-17 §4，全 source_kind 通用，缺省 SUBJECT 由 ScreenConfigSchema 补） */
     private static final Set<String> SCOPE_MODES = Set.of("SUBJECT", "GLOBAL", "NAMED_GROUP");
 
@@ -687,7 +690,7 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
         }
     }
 
-    /** 不可变批次策略只允许时效与完整性开关，groupCode 始终由服务端屏元数据注入。 */
+    /** 不可变批次策略只允许时效、完整性与可选固定 ID，groupCode 始终由服务端屏元数据注入。 */
     private void validateBatchPolicy(JsonNode cfg) {
         JsonNode policy = cfg.path("batchPolicy");
         if (policy.isMissingNode()) {
@@ -696,7 +699,7 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
         if (!policy.isObject()) {
             throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
         }
-        Set<String> allowed = Set.of("maxAgeDays", "requiredComplete");
+        Set<String> allowed = Set.of("maxAgeDays", "requiredComplete", "pinnedBatchId");
         var fields = policy.fieldNames();
         while (fields.hasNext()) {
             if (!allowed.contains(fields.next())) {
@@ -711,6 +714,17 @@ public class ScreenDatasourceServiceImpl implements ScreenDatasourceService {
         }
         if (policy.has("requiredComplete") && !policy.path("requiredComplete").isBoolean()) {
             throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+        }
+        if (policy.has("pinnedBatchId")) {
+            JsonNode pinnedBatchId = policy.path("pinnedBatchId");
+            if (!pinnedBatchId.isTextual()) {
+                throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+            }
+            String value = pinnedBatchId.textValue();
+            if (value == null || value.isBlank() || !value.equals(value.trim())
+                    || !value.matches(PINNED_BATCH_ID_PATTERN)) {
+                throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+            }
         }
     }
 

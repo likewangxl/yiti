@@ -57,7 +57,7 @@
 
 ### 2.1 大屏运行时质量扩展
 
-外部仍只有既有 `POST /api/screen/data`，不新增批次端点。请求顶层 `batchId` 可空；非空时锁定性能批次 ID，空值由服务端按当前屏机构组和完整授权集合选择最新可见完整批次。响应新增可空 `quality` 与 `columnsMeta` 扩展，旧客户端可忽略。启用 `batchPolicy` 的分行数据源在任一周期返回同一批次 ID；`COMPLETE`、`STALE` 和 `NO_COMPLETE_BATCH` 的语义、来源截至日期、`dataClassification` 及 typed `historyCoverage` 字段以 [03-接口设计与报文](03-接口设计与报文.md#721-运行时批次质量与不可变快照) 为准。
+外部仍只有既有 `POST /api/screen/data`，不新增批次端点。未固定批次的数据源保持原语义：请求顶层 `batchId` 可空，省略时由服务端按当前屏机构组和完整授权集合选择最新可见完整批次，传入时按请求 ID 查询。可信数据源 `batchPolicy.pinnedBatchId` 配置存在时，服务端改按该配置 ID 查询；请求可省略 `batchId` 或重复相同 ID，不同的非空值以既有 `RPT-43008` 失败关闭。固定 ID 必须为首尾无空白、1–64 位 ASCII 字母/数字/下划线/连字符；批次策略不支持配置机构组，机构组和完整授权集合仍取自当前屏服务端解析结果。固定目标缺失、组不匹配或其指标合同未覆盖配置指标时返回空行和 `NO_COMPLETE_BATCH`，绝不回退 latest 或补零；同一固定批次 ID 仍可用于 `historyRows` 日期比较。此配置只选择 performance 已生成的不可变批次，不创建 report 快照。响应新增可空 `quality` 与 `columnsMeta` 扩展，旧客户端可忽略。启用 `batchPolicy` 的分行数据源在任一周期返回同一批次 ID；`COMPLETE`、`STALE` 和 `NO_COMPLETE_BATCH` 的语义、来源截至日期、`dataClassification` 及 typed `historyCoverage` 字段以 [03-接口设计与报文](03-接口设计与报文.md#721-运行时批次质量与不可变快照) 为准。
 
 ### 2.2 不对外暴露的内容
 - 不对外暴露 Java API 接口（`*Api.java`）

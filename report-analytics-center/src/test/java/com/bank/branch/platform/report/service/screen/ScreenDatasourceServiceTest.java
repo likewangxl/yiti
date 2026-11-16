@@ -952,7 +952,8 @@ class ScreenDatasourceServiceTest {
                 + "\"table\":\"ORG_INDEX_RESULT\",\"subjectCol\":\"client_subject\","
                 + "\"subjectParam\":\"clientSubject\","
                 + "\"metrics\":[{\"metricCode\":\"M_0001\",\"metricName\":\"client metric\",\"slot\":999}],"
-                + "\"batchPolicy\":{\"maxAgeDays\":7,\"requiredComplete\":true},"
+                + "\"batchPolicy\":{\"maxAgeDays\":7,\"requiredComplete\":true,"
+                + "\"pinnedBatchId\":\"BR_DIRECT_20261115\"},"
                 + "\"qualityPolicy\":{\"maxAgeDays\":14,\"requiredComplete\":false},"
                 + "\"extensionMarker\":{\"uiOnly\":\"retain-me\"}}");
         req.setDsName("机构指标更新");
@@ -968,10 +969,35 @@ class ScreenDatasourceServiceTest {
                 .contains("\"subjectParam\":\"orgCode\"")
                 .contains("\"metricName\":\"机构存款\"")
                 .contains("\"slot\":7")
-                .contains("\"batchPolicy\":{\"maxAgeDays\":7,\"requiredComplete\":true}")
+                .contains("\"batchPolicy\":{\"maxAgeDays\":7,\"requiredComplete\":true,"
+                        + "\"pinnedBatchId\":\"BR_DIRECT_20261115\"}")
                 .contains("\"qualityPolicy\":{\"maxAgeDays\":14,\"requiredComplete\":false}")
                 .contains("\"extensionMarker\":{\"uiOnly\":\"retain-me\"}");
         assertThat(config).doesNotContain("client_subject", "clientSubject", "client metric", "\"slot\":999");
+    }
+
+    @Test
+    void save_batchPolicyRejectsInvalidPinnedBatchIds() {
+        List<String> invalidBatchPolicies = List.of(
+                "\"pinnedBatchId\":null",
+                "\"pinnedBatchId\":\"\"",
+                "\"pinnedBatchId\":12",
+                "\"pinnedBatchId\":true",
+                "\"pinnedBatchId\":\" PINNED-OLD \"",
+                "\"pinnedBatchId\":\"PINNED.ID\"",
+                "\"pinnedBatchId\":\"" + "A".repeat(65) + "\"");
+
+        for (String policyField : invalidBatchPolicies) {
+            ScreenDatasourceSaveReqDTO req = wideReq();
+            req.setConfigJson("{\"table\":\"EMP_INDEX_RESULT\","
+                    + "\"metrics\":[{\"metricCode\":\"M_0001\"}],"
+                    + "\"batchPolicy\":{" + policyField + "}}");
+            assertThatThrownBy(() -> service.save(req))
+                    .as("policy field %s", policyField)
+                    .isInstanceOf(BizException.class)
+                    .hasFieldOrPropertyWithValue("code", RptErrorCode.SCREEN_DS_CONFIG_INVALID.getCode());
+        }
+        verify(dsMapper, never()).insert(any(RptScreenDatasource.class));
     }
 
     /** 已发布屏快照引用的数据源允许原地改变查询语义，但必须经过引用屏安全矩阵并完整审计。 */

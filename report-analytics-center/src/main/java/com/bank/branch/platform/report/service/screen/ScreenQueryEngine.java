@@ -71,6 +71,9 @@ public class ScreenQueryEngine {
     /** 查询超时（秒），大屏接口要求快速失败 */
     private static final int QUERY_TIMEOUT_SEC = 5;
 
+    /** 可信数据源批次固定值只接受便于跨模块传递的 ASCII 不透明 ID。 */
+    private static final String PINNED_BATCH_ID_PATTERN = "^[A-Za-z0-9_-]{1,64}$";
+
     /** 宽表引导式允许的表 → [主体列, 上下文参数名, SYS_CONTROL.scope_dim] */
     private static final Map<String, String[]> WIDE_TABLES = Map.of(
             "EMP_INDEX_RESULT", new String[]{"emp_id", "empId", "EMP"},
@@ -273,20 +276,27 @@ public class ScreenQueryEngine {
         if (groupCode == null) {
             throw new RptException(RptErrorCode.SCREEN_SCOPE_INVALID);
         }
+        BatchPolicy policy = batchPolicy(cfg);
+        String requestedBatchId = trimToNull(req.getBatchId());
+        if (policy.pinnedBatchId() != null && requestedBatchId != null
+                && !policy.pinnedBatchId().equals(requestedBatchId)) {
+            // 请求 ID 只可重复可信配置中的固定 ID，不能覆盖发布数据源定义。
+            throw new RptException(RptErrorCode.SCREEN_DATA_QUERY_FAILED);
+        }
         if (batchQueryApi == null) {
             throw new RptException(RptErrorCode.SCREEN_DATA_QUERY_FAILED,
                     new IllegalStateException("BranchDashboardBatchQueryApi unavailable"));
         }
-        BatchPolicy policy = batchPolicy(cfg);
         Optional<BranchDashboardBatchDTO> found;
         try {
-            String batchId = trimToNull(req.getBatchId());
-            found = batchId == null
+            String fixedBatchId = policy.pinnedBatchId() == null ? requestedBatchId : policy.pinnedBatchId();
+            found = fixedBatchId == null
                     ? batchQueryApi.latest(groupCode, authorized)
-                    : batchQueryApi.byId(batchId, authorized);
+                    : batchQueryApi.byId(fixedBatchId, authorized);
         } catch (RuntimeException ex) {
             log.warn("[ScreenQueryEngine] 不可变批次查询失败 groupCode={} batchId={} cause={}",
-                    groupCode, req.getBatchId(), ex.toString());
+                    groupCode, policy.pinnedBatchId() == null ? requestedBatchId : policy.pinnedBatchId(),
+                    ex.toString());
             throw new RptException(RptErrorCode.SCREEN_DATA_QUERY_FAILED, ex);
         }
         if (found == null || found.isEmpty()) {
@@ -298,6 +308,15 @@ public class ScreenQueryEngine {
         if (!groupCode.equals(trimToNull(snapshot.getGroupCode()))) {
             return noImmutableBatch(cfg, authorized.size(), policy.maxAgeDays(),
                     "不可变批次机构组与当前屏不一致");
+        }
+        if (policy.pinnedBatchId() != null
+                && !policy.pinnedBatchId().equals(trimToNull(snapshot.getBatchId()))) {
+            return noImmutableBatch(cfg, authorized.size(), policy.maxAgeDays(),
+                    "固定不可变批次编号与查询结果不一致");
+        }
+        if (policy.pinnedBatchId() != null && !hasConfiguredMetricContracts(cfg, snapshot)) {
+            return noImmutableBatch(cfg, authorized.size(), policy.maxAgeDays(),
+                    "固定不可变批次缺少数据源配置指标合同");
         }
         BranchDashboardQualityDTO sourceQuality = snapshot.getQuality();
         int expectedSubjects = sourceQuality == null || sourceQuality.getExpectedSubjects() <= 0
@@ -367,7 +386,26 @@ public class ScreenQueryEngine {
         Integer maxAgeDays = policy.has("maxAgeDays") ? policy.path("maxAgeDays").asInt() : null;
         boolean requiredComplete = !policy.has("requiredComplete")
                 || policy.path("requiredComplete").asBoolean();
-        return new BatchPolicy(maxAgeDays, requiredComplete);
+        String pinnedBatchId = policy.has("pinnedBatchId") ? policy.path("pinnedBatchId").textValue() : null;
+        return new BatchPolicy(maxAgeDays, requiredComplete, pinnedBatchId);
+    }
+
+    private boolean hasConfiguredMetricContracts(JsonNode cfg, BranchDashboardBatchDTO snapshot) {
+        Map<String, BranchDashboardMetricContractDTO> contracts = snapshot.getMetricContracts();
+        if (contracts == null) {
+            return false;
+        }
+        JsonNode metrics = cfg.path("metrics");
+        if (!metrics.isArray() || metrics.isEmpty()) {
+            return false;
+        }
+        for (JsonNode metric : metrics) {
+            String code = trimToNull(metric.path("metricCode").asText(null));
+            if (code == null || contracts.get(code) == null) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private List<String> batchColumns(JsonNode cfg) {
@@ -705,7 +743,7 @@ public class ScreenQueryEngine {
         };
     }
 
-    private record BatchPolicy(Integer maxAgeDays, boolean requiredComplete) {
+    private record BatchPolicy(Integer maxAgeDays, boolean requiredComplete, String pinnedBatchId) {
     }
 
     private record RatioContract(String numeratorCode, String denominatorCode) {
@@ -1068,7 +1106,7 @@ public class ScreenQueryEngine {
         if (!policy.isObject()) {
             throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
         }
-        Set<String> allowed = Set.of("maxAgeDays", "requiredComplete");
+        Set<String> allowed = Set.of("maxAgeDays", "requiredComplete", "pinnedBatchId");
         var fields = policy.fieldNames();
         while (fields.hasNext()) {
             if (!allowed.contains(fields.next())) {
@@ -1083,6 +1121,17 @@ public class ScreenQueryEngine {
         }
         if (policy.has("requiredComplete") && !policy.path("requiredComplete").isBoolean()) {
             throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+        }
+        if (policy.has("pinnedBatchId")) {
+            JsonNode pinnedBatchId = policy.path("pinnedBatchId");
+            if (!pinnedBatchId.isTextual()) {
+                throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+            }
+            String value = pinnedBatchId.textValue();
+            if (value == null || value.isBlank() || !value.equals(value.trim())
+                    || !value.matches(PINNED_BATCH_ID_PATTERN)) {
+                throw new RptException(RptErrorCode.SCREEN_DS_CONFIG_INVALID);
+            }
         }
     }
 
