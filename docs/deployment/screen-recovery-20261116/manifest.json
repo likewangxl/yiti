@@ -1,0 +1,240 @@
+{
+  "format": "YITI-RECOVERY-1",
+  "createdDate": "2026-11-16",
+  "status": "OFFLINE_RECOVERY_MATERIALS_NOT_VERIFIED_FINAL_DATABASE_EXPORT",
+  "files": [
+    {
+      "path": "daily-screen-data-20261109/apply-formal-bindings.py",
+      "size": 7690,
+      "sha256": "0b82cb26f7882bd4656ef17c84f59cde6eeb8ee44b86e92558eea7662f55f3fe"
+    },
+    {
+      "path": "daily-screen-data-20261109/apply-formal-data.py",
+      "size": 16150,
+      "sha256": "68fe934954d664dee811d5a42f8db9ecbece1c7f32420980cc2f0dd888dcb24a"
+    },
+    {
+      "path": "daily-screen-data-20261109/apply-formal-kpi.py",
+      "size": 7844,
+      "sha256": "dcc2952e3d28490e003824fe9b886b902be0b7cb336014c004169fdf28623596"
+    },
+    {
+      "path": "daily-screen-data-20261109/daily-plan.private.json",
+      "size": 3682744,
+      "sha256": "28bc2e4eb65644a56c2f84315499a1f94081f367b68abc3908184fd2fbf649db"
+    },
+    {
+      "path": "daily-screen-data-20261109/formal/acceptance.json",
+      "size": 1149,
+      "sha256": "c5edf6245c79f4a9b81590240e2fa4f4882a54bc077c21ddafc5688d8a155cae"
+    },
+    {
+      "path": "daily-screen-data-20261109/formal/aggregate-rate-binding-change.json",
+      "size": 3830,
+      "sha256": "10e410a0267a2acea4813c83c31bad16063af05cccbb0529f06c837d098de258"
+    },
+    {
+      "path": "daily-screen-data-20261109/formal/baseline-comparisons.js",
+      "size": 10281,
+      "sha256": "fc2ff2fdb82e0da50d98979e48eb6e597acbc8a6baea36f167f7e0c7c1ff5d91"
+    },
+    {
+      "path": "daily-screen-data-20261109/formal/baseline-range-periods.json",
+      "size": 304,
+      "sha256": "30f2b09f22264fd56a3182c4d4cd460bcd72540d3e347609cfd367d68f0ce70b"
+    },
+    {
+      "path": "daily-screen-data-20261109/formal/binding-plan.json",
+      "size": 3419,
+      "sha256": "f60ae1d91182c05ddd84e071aa0da77a5c35a1719f4e9fd7af7bc0b8a7d4e602"
+    },
+    {
+      "path": "daily-screen-data-20261109/formal/calculated.private.json.gz",
+      "size": 988377,
+      "sha256": "56084ec6f28fae9b6b0269e1087064c1cdbeb3971c5eb81904139b18cf185b82"
+    },
+    {
+      "path": "daily-screen-data-20261109/formal/complete-display.js",
+      "size": 10757,
+      "sha256": "39ee959bb48fd1324215305bd2eb8add5adf882932b7c56063d0b70871e809f3"
+    },
+    {
+      "path": "daily-screen-data-20261109/formal/composition-display-unit.js",
+      "size": 9598,
+      "sha256": "495a3e068fc52f5aea130955794dd982b314ae93f4b82a60da6254279916244d"
+    },
+    {
+      "path": "daily-screen-data-20261109/formal/configuration-before.private.json.gz",
+      "size": 614738,
+      "sha256": "6800aaf388e81254519149d40fc70677d4044af62c91a4619d08404447fcc76c"
+    },
+    {
+      "path": "daily-screen-data-20261109/formal/data-apply.json",
+      "size": 935,
+      "sha256": "688fcdfa49ba683e3df5dcda7308b4adbf49bdf37bc7468d58ec7f0d68e7ea82"
+    },
+    {
+      "path": "daily-screen-data-20261109/formal/definition-plan.private.json",
+      "size": 120540,
+      "sha256": "a88fa0d4b3b090416d6db9580901236dcf111cd1627b1b977d1da1d5add340e9"
+    },
+    {
+      "path": "daily-screen-data-20261109/formal/formal-snapshot.private.json",
+      "size": 1622058,
+      "sha256": "eabf35af85bfdee0ace46194cf9053efe810e77b541b5bc5fb8c64691fa9f190"
+    },
+    {
+      "path": "daily-screen-data-20261109/formal/kpi-apply.json",
+      "size": 271,
+      "sha256": "cebe94e501ed0918cac8c994365002a9f20285b17deecd176bbba2a8cf1df4c2"
+    },
+    {
+      "path": "daily-screen-data-20261109/formal/labels-9102.js",
+      "size": 9330,
+      "sha256": "b3398800081bbfca2febb337d97797a72044e2897dcac84605cb41861df6ded5"
+    },
+    {
+      "path": "daily-screen-data-20261109/formal/labels-9103.js",
+      "size": 9330,
+      "sha256": "96419a5aeb4383e1701f6e52febb2634c0382f9dba33dd0d2af2d4f7c2994b5f"
+    },
+    {
+      "path": "daily-screen-data-20261109/formal/labels-9104.js",
+      "size": 9331,
+      "sha256": "586dbfb3b3ac7b9d782de16a8ac9b6b45fc7249375893f34902f83c4cc643442"
+    },
+    {
+      "path": "daily-screen-data-20261109/formal/labels-9105.js",
+      "size": 9331,
+      "sha256": "82d7d186c57a46265b3ea6e608fc16633da32e0168bf9b8233a694c5a1e6f880"
+    },
+    {
+      "path": "daily-screen-data-20261109/formal/prepare-publish.py",
+      "size": 631,
+      "sha256": "d008956795b57795ac1b183649b5e20b5687b347a9b2974ea333697dc85bec86"
+    },
+    {
+      "path": "daily-screen-data-20261109/formal/publish-9101.js",
+      "size": 9332,
+      "sha256": "fa0a44c967ded9902c19c1eae4593d81abe671aefad1e62d9751df156eddff79"
+    },
+    {
+      "path": "daily-screen-data-20261109/formal/publish-9102.js",
+      "size": 9330,
+      "sha256": "179895bfad98c444ce7187582f4cfbb4711a10c2da5e85530b237da5346fab85"
+    },
+    {
+      "path": "daily-screen-data-20261109/formal/publish-9103.js",
+      "size": 9330,
+      "sha256": "8947fa9c2f9d0194dfdd906672cfb5dea9a3c35083b9f73f738fe8d81f515547"
+    },
+    {
+      "path": "daily-screen-data-20261109/formal/publish-9104.js",
+      "size": 9331,
+      "sha256": "6784de67315817ad45bf3d86c942fc565754787701078956467bd594c06fdac9"
+    },
+    {
+      "path": "daily-screen-data-20261109/formal/publish-9105.js",
+      "size": 9331,
+      "sha256": "80fe2d41a4ff005e30f7df0aaf9d1c31849a5a5ca2ccfaf5648d1aeb06de958b"
+    },
+    {
+      "path": "daily-screen-data-20261109/formal/publish-screen.template.js",
+      "size": 6750,
+      "sha256": "bdf951bbc46c92916987e5a1a312a96f4739b64f8fa2188e79b046ef508fb357"
+    },
+    {
+      "path": "daily-screen-data-20261109/formal/retired-standalone-test.json",
+      "size": 533,
+      "sha256": "b6dcaf7e12a1cc9b76652156193bd8a236babf51ab9374f6e62987ff5c5494fd"
+    },
+    {
+      "path": "daily-screen-data-20261109/formal/semantic-label-corrections.json",
+      "size": 694,
+      "sha256": "320ac360202417c5d7f2d8d40366b92a27c9e8575fcc40183feacb3c6cc4ae89"
+    },
+    {
+      "path": "daily-screen-data-20261109/formal/source-plan.private.json",
+      "size": 411614,
+      "sha256": "ea490c6e87d8903b89f112bdd430eaaafb2241562aaf8b8d8c9d99b4f2c8661b"
+    },
+    {
+      "path": "daily-screen-data-20261109/formal/source-rows.private.json.gz",
+      "size": 2536259,
+      "sha256": "712044e4e4d48767ebb61d422c13ab5dcc8adbd609ab6deba9135a9f00f35265"
+    },
+    {
+      "path": "daily-screen-data-20261109/inventory.py",
+      "size": 5426,
+      "sha256": "71b5aa34843004d9368dcde7ef8e6c7a829929656c9634ff539416fe3de447f5"
+    },
+    {
+      "path": "daily-screen-data-20261109/prepare-formal-definitions.py",
+      "size": 8030,
+      "sha256": "3610fb94bf589363d6f082e91ab174e6d9361d4a2a203cec210650ec6331b866"
+    },
+    {
+      "path": "daily-screen-data-20261109/prepare-formal-source.py",
+      "size": 3665,
+      "sha256": "b59122f30513bc91456fc0ceebf1081f5af23b89f9f109e806ebb6cfe19cc09e"
+    },
+    {
+      "path": "observed-final/city-source-contract.json",
+      "size": 95999,
+      "sha256": "f4277022bc6ea8d51473e147a53c2554d6e43bc62ebfd8d0af1d0a0e4005882a"
+    },
+    {
+      "path": "observed-final/source-live-inspect.json",
+      "size": 14284,
+      "sha256": "06cd09484924337cc0607a2111d43b316a63691ec84ddcbe3b40ef6234ae6694"
+    },
+    {
+      "path": "retail-goals-20261110/acceptance.json",
+      "size": 510,
+      "sha256": "1cc117ce715a044ad0fb11a0e2da4204d9a9c9bc505f7c33fafeeee84f355411"
+    },
+    {
+      "path": "retail-goals-20261110/apply.json",
+      "size": 501,
+      "sha256": "1a7ff7d12bebf8c4235c0d08a95164d62385fc81fcb30a853559eb9f9763b0a1"
+    },
+    {
+      "path": "retail-goals-20261110/apply.py",
+      "size": 6139,
+      "sha256": "32b69c6773952e58f2ca793ac818d4d03d1afc9f9391d77cccb0117ac8ace492"
+    },
+    {
+      "path": "retail-goals-20261110/inventory.private.json",
+      "size": 60343,
+      "sha256": "b78aacc559708c594cb79c74e3063305574f600990366bcb7254978865e15ed1"
+    },
+    {
+      "path": "retail-goals-20261110/plan-summary.json",
+      "size": 479,
+      "sha256": "b84fab7a8359f85ed78832508a3e9943fec28543a4a947c977cba4c42088351a"
+    },
+    {
+      "path": "retail-goals-20261110/plan.private.json",
+      "size": 166569,
+      "sha256": "98c4b8cb1ca89d9a8ccb448023a600060b5a38b9ae74fd35a2a51267ee7a488b"
+    },
+    {
+      "path": "retail-goals-20261110/prepare.py",
+      "size": 3767,
+      "sha256": "57f837ebbb5996dd65a664a60896d58af30b37f893065b75e1234c323052c160"
+    },
+    {
+      "path": "retail-goals-20261110/publish.js",
+      "size": 4220,
+      "sha256": "59b63f7179136fc33140fcdfd236995110b7742a752bab45d50e9e3e20cfe25b"
+    }
+  ],
+  "missing": [
+    "Final full published/draft database export after all edits",
+    "Authoritative target schema and current authorization directories",
+    "Target database execution and restore verification"
+  ],
+  "sourceWindow": "2026-11-09 to 2026-11-10; original database currently unreachable",
+  "encryptedSha256": "6e606cf0db6f33f9a6446b33dc26232458cf3b5251103a8e09a48a1037bb8efb",
+  "encryptedSize": 4597461
+}
