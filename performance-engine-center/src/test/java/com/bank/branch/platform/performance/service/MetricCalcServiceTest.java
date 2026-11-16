@@ -133,6 +133,125 @@ class MetricCalcServiceTest {
     }
 
     @Test
+    @DisplayName("预检：DISABLED 指标在 SQL 路由前拒绝，不创建任务")
+    void preflightMetric_disabledRejectsBeforeSqlRoutingOrTaskCreation() {
+        PerfMetricDef def = buildEmpSqlMetric();
+        def.setMetricCode("TEST_CALC_DISABLED_PREFLIGHT");
+        def.setStatus("DISABLED");
+        when(metricDefService.getByCodeOrNull(def.getMetricCode())).thenReturn(def);
+
+        assertThatThrownBy(() -> metricCalcService.preflightMetric(
+                def.getMetricCode(), LocalDate.of(2026, 8, 14)))
+                .isInstanceOf(PerfException.class)
+                .extracting("errorCode")
+                .isEqualTo(PerfErrorCode.VALIDATION_FAILED);
+
+        verify(statShowSqlRouter, never()).route(anyString(), any(LocalDate.class));
+        verify(perfRunTaskMapper, never()).insert(any(PerfRunTask.class));
+    }
+
+    @Test
+    @DisplayName("预检：INACTIVE 指标在 SQL 路由前拒绝，不创建任务")
+    void preflightMetric_inactiveRejectsBeforeSqlRoutingOrTaskCreation() {
+        PerfMetricDef def = buildEmpSqlMetric();
+        def.setMetricCode("TEST_CALC_INACTIVE_PREFLIGHT");
+        def.setStatus("INACTIVE");
+        when(metricDefService.getByCodeOrNull(def.getMetricCode())).thenReturn(def);
+
+        assertThatThrownBy(() -> metricCalcService.preflightMetric(
+                def.getMetricCode(), LocalDate.of(2026, 8, 14)))
+                .isInstanceOf(PerfException.class)
+                .extracting("errorCode")
+                .isEqualTo(PerfErrorCode.VALIDATION_FAILED);
+
+        verify(statShowSqlRouter, never()).route(anyString(), any(LocalDate.class));
+        verify(perfRunTaskMapper, never()).insert(any(PerfRunTask.class));
+    }
+
+    @Test
+    @DisplayName("预检兼容：DRAFT 和未设置状态的指标保留既有计算入口行为")
+    void preflightMetric_preservesDraftAndNullStatusCompatibility() {
+        PerfMetricDef draft = buildEmpSqlMetric();
+        draft.setMetricCode("TEST_CALC_DRAFT_PREFLIGHT");
+        draft.setStatus("DRAFT");
+        PerfMetricDef unspecified = buildEmpSqlMetric();
+        unspecified.setMetricCode("TEST_CALC_NULL_STATUS_PREFLIGHT");
+        unspecified.setSqlText("SELECT id AS base_key, v AS metric_value FROM t_null");
+        unspecified.setStatus(null);
+        when(metricDefService.getByCodeOrNull(draft.getMetricCode())).thenReturn(draft);
+        when(metricDefService.getByCodeOrNull(unspecified.getMetricCode())).thenReturn(unspecified);
+        LocalDate dataDate = LocalDate.of(2026, 8, 14);
+
+        metricCalcService.preflightMetric(draft.getMetricCode(), dataDate);
+        metricCalcService.preflightMetric(unspecified.getMetricCode(), dataDate);
+
+        verify(statShowSqlRouter).route(draft.getSqlText(), dataDate);
+        verify(statShowSqlRouter).route(unspecified.getSqlText(), dataDate);
+        verify(perfRunTaskMapper, never()).insert(any(PerfRunTask.class));
+    }
+
+    @Test
+    @DisplayName("直接预建任务：DISABLED 指标在插入 run_task 前拒绝")
+    void createPendingTask_disabledRejectsBeforeInsert() {
+        PerfMetricDef def = buildEmpSqlMetric();
+        def.setMetricCode("TEST_CALC_DISABLED_PRECREATE");
+        def.setStatus("DISABLED");
+        when(metricDefService.getByCodeOrNull(def.getMetricCode())).thenReturn(def);
+
+        assertThatThrownBy(() -> metricCalcService.createPendingTask(
+                def.getMetricCode(), LocalDate.of(2026, 8, 14), "V1", "MANUAL"))
+                .isInstanceOf(PerfException.class)
+                .extracting("errorCode")
+                .isEqualTo(PerfErrorCode.VALIDATION_FAILED);
+
+        verify(perfRunTaskMapper, never()).insert(any(PerfRunTask.class));
+    }
+
+    @Test
+    @DisplayName("同步执行：DISABLED 指标不建任务、不调用 SQL，也不写宽表")
+    void calcMetricWithStats_disabledRejectsBeforeTaskOrWideTableWrites() {
+        PerfMetricDef def = buildEmpSqlMetric();
+        def.setMetricCode("TEST_CALC_DISABLED_EXECUTE");
+        def.setStatus("DISABLED");
+        when(metricDefService.getByCodeOrNull(def.getMetricCode())).thenReturn(def);
+
+        assertThatThrownBy(() -> metricCalcService.calcMetricWithStats(
+                def.getMetricCode(), LocalDate.of(2026, 8, 14), "V1", "MANUAL"))
+                .isInstanceOf(PerfException.class)
+                .extracting("errorCode")
+                .isEqualTo(PerfErrorCode.VALIDATION_FAILED);
+
+        verify(perfRunTaskMapper, never()).insert(any(PerfRunTask.class));
+        verify(sqlExecutor, never()).execute(anyString(), anyMap(), any(Duration.class));
+        verify(empIndexResultMapper, never()).insertSlotValue(anyString(), any(), anyString(), any(), any());
+        verify(orgIndexResultMapper, never()).insertSlotValue(anyString(), any(), anyString(), any(), any());
+        verify(custIndexResultMapper, never()).insertSlotValue(anyString(), any(), anyString(), any(), any());
+    }
+
+    @Test
+    @DisplayName("异步执行线程：DISABLED 指标不重复建任务、不写宽表，并失败既有预建任务")
+    void calcMetricWithStats_presetTaskAndDisabledMarksExistingTaskFailedWithoutWrites() {
+        PerfMetricDef def = buildEmpSqlMetric();
+        def.setMetricCode("TEST_CALC_DISABLED_ASYNC");
+        def.setStatus("DISABLED");
+        when(metricDefService.getByCodeOrNull(def.getMetricCode())).thenReturn(def);
+
+        assertThatThrownBy(() -> metricCalcService.calcMetricWithStats(
+                def.getMetricCode(), LocalDate.of(2026, 8, 14), "V1", "MANUAL", null, "T_DISABLED"))
+                .isInstanceOf(PerfException.class)
+                .extracting("errorCode")
+                .isEqualTo(PerfErrorCode.VALIDATION_FAILED);
+
+        verify(perfRunTaskMapper, never()).insert(any(PerfRunTask.class));
+        verify(perfRunTaskMapper).updateStatus(eq("T_DISABLED"), eq("FAILED"), anyString());
+        verify(perfRunTaskMapper, never()).updateStatus(eq("T_DISABLED"), eq("RUNNING"), anyString());
+        verify(sqlExecutor, never()).execute(anyString(), anyMap(), any(Duration.class));
+        verify(empIndexResultMapper, never()).insertSlotValue(anyString(), any(), anyString(), any(), any());
+        verify(orgIndexResultMapper, never()).insertSlotValue(anyString(), any(), anyString(), any(), any());
+        verify(custIndexResultMapper, never()).insertSlotValue(anyString(), any(), anyString(), any(), any());
+    }
+
+    @Test
     @DisplayName("SQL 指标 + baseDim=EMP：调 SqlExecutor + 批量 UPSERT + run_task 标记 SUCCESS")
     void calcMetric_sqlOnEmp_writesWideTableAndMarksSuccess() {
         PerfMetricDef def = buildEmpSqlMetric();
@@ -461,6 +580,7 @@ class MetricCalcServiceTest {
     @Test
     @DisplayName("createPendingTask：请求线程内先落 PENDING 行并返回 taskId（异步提交入口）")
     void createPendingTask_insertsPendingRowAndReturnsId() {
+        lenient().when(metricDefService.getByCodeOrNull("TEST_CALC_EMP_01")).thenReturn(buildEmpSqlMetric());
         String taskId = metricCalcService.createPendingTask(
                 "TEST_CALC_EMP_01", LocalDate.of(2026, 7, 22), "v1", "MANUAL");
 

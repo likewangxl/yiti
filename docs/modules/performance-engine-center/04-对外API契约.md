@@ -518,6 +518,7 @@ public interface PerfCalcApi {
      * @param version    数据版本（必填，通常取自 sys_control.current_version）
      * @return run_task 主键 ID
      * @throws IllegalArgumentException 任一参数为 null
+     * @throws PerfException 指标状态为 DISABLED 或 INACTIVE 时，以 VALIDATION_FAILED 拒绝且不写指标结果
      */
     String triggerMetricCalc(String metricCode, LocalDate dataDate, String version);
 

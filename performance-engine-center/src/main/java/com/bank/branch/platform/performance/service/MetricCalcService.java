@@ -42,7 +42,7 @@ import java.util.UUID;
  * <p>职责：
  * <ul>
  *   <li>读取指标定义（{@link MetricDefService#getByCodeOrNull}），不存在或已软删除抛
- *       {@link PerfErrorCode#METRIC_NOT_FOUND}。</li>
+ *       {@link PerfErrorCode#METRIC_NOT_FOUND}；DISABLED/INACTIVE 状态拒绝计算。</li>
  *   <li>按 {@code calc_logic_type} 路由：
  *       <ul>
  *         <li>SQL → {@link SqlExecutor}（含 {@link com.bank.branch.platform.performance.service.engine.SqlValidator} 黑名单）</li>
@@ -156,7 +156,7 @@ public class MetricCalcService {
      * @param dataDate   数据日期（必填）
      * @param version    数据版本（必填）
      * @return run_task 主键 ID
-     * @throws PerfException 指标不存在 / 指标已软删除 / SQL 语法非法 / 沙盒拦截 / 超时 / PROC 未支持 / slot 未分配
+     * @throws PerfException 指标不存在 / 软删除 / DISABLED/INACTIVE / SQL 语法非法 / 沙盒拦截 / 超时 / PROC 未支持 / slot 未分配
      */
     public String calcMetric(String metricCode, LocalDate dataDate, String version) {
         // 保持旧调用方兼容：默认 triggerType = MANUAL
@@ -642,16 +642,22 @@ public class MetricCalcService {
     }
 
     /**
-     * 加载可计算的指标定义并做基本校验（不存在 / 已软删 / 维度无关型一律拒绝）.
+     * 加载可计算的指标定义并做基本校验（不存在 / 已软删 / DISABLED / INACTIVE / 维度无关型一律拒绝；DRAFT/null 状态保持兼容）.
      *
      * @param metricCode 指标编码
      * @return 指标定义
-     * @throws PerfException METRIC_NOT_FOUND / METRIC_CALC_LOGIC_INVALID
+     * @throws PerfException METRIC_NOT_FOUND / VALIDATION_FAILED / METRIC_CALC_LOGIC_INVALID
      */
     private PerfMetricDef loadCalcableDef(String metricCode) {
         PerfMetricDef def = metricDefService.getByCodeOrNull(metricCode);
         if (def == null || (def.getDeleted() != null && def.getDeleted() == 1)) {
             throw new PerfException(PerfErrorCode.METRIC_NOT_FOUND, metricCode);
+        }
+        String status = def.getStatus();
+        if (status != null && ("DISABLED".equalsIgnoreCase(status.trim())
+                || "INACTIVE".equalsIgnoreCase(status.trim()))) {
+            throw new PerfException(PerfErrorCode.VALIDATION_FAILED,
+                    "DISABLED/INACTIVE 指标不可执行计算: " + metricCode);
         }
         // V1.9：维度无关型指标（baseDim=null）无 slot、无宽表归属，不允许进入计算路径
         if (def.getBaseDim() == null || def.getBaseDim().isBlank()) {
@@ -666,14 +672,17 @@ public class MetricCalcService {
      *
      * <p>必须在请求线程调用的两个理由：taskId 要立刻返回给前端轮询；{@code started_by} 取自
      * {@code CurrentUserApi} 的 ThreadLocal，异步线程里拿不到会兜底成 SYSTEM，操作人就丢了。
+     * 创建任务前会再次检查指标定义，避免预检后状态变为 DISABLED/INACTIVE 时留下 PENDING 任务。
      *
      * @param metricCode  指标编码
      * @param dataDate    数据日期
      * @param version     数据版本
      * @param triggerType 触发类型（SCHEDULED/MANUAL/RECALC）
      * @return 新建 run_task 主键 ID
+     * @throws PerfException 指标不存在、已软删除或处于 DISABLED/INACTIVE 状态
      */
     public String createPendingTask(String metricCode, LocalDate dataDate, String version, String triggerType) {
+        loadCalcableDef(metricCode);
         String taskId = UUID.randomUUID().toString().replace("-", "");
         insertPendingTask(taskId, metricCode, dataDate, version, triggerType);
         return taskId;
